@@ -1,5 +1,5 @@
 all:
-	g++ main.cpp -o run -lraylib
+	g++ main.cpp Graphics.cpp -o run -lraylib
 
 clean:
 	rm run

@@ -1,6 +1,7 @@
 // TO HANDLE TILE MAPPING FUNCTIONALITIES
 
 #include <raylib.h>
+#include <raymath.h>
 
 // start/end of game life cycle
 void initGraphics();
@@ -27,7 +28,7 @@ struct Graphics{
     Rectangle tile_screen = Rectangle{0,0,160, 160};
 };
 
-Graphics graphics;
+static Graphics graphics;
 
 // the objects of the asset back, ie) walls, doors, floors, etc.
 // using bit flags to fall through eaiser, ie) room | wall would draw a room and a wall
@@ -63,4 +64,3 @@ void renderGraphics(int, Vector2, float scale);
 
 // renders a room with open doors left and right
 void draw_room_lrd(Vector2 pos, float scale);
-

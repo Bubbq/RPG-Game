@@ -1,6 +1,4 @@
 #include "Graphics.h"
-#include<raymath.h>
-#include <raylib.h>
 
 // have to draw the element passed based on its position in the png
 void renderGraphics(int element, Vector2 pos, float scale){
