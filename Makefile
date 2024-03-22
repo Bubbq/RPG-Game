@@ -2,4 +2,5 @@ all:
 	g++ editor.cpp -o run -lraylib
 
 clean:
-	rm run
+	rm -r ./levels/level*
+	rm run	

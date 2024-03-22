@@ -1,38 +1,38 @@
-16 0 0 wall_horizontal
-16 80 0 wall_horizontal_beam_middle
-0 80 0 wall_beam_horizontal_top_left
-80 80 0 wall_horizontal_beam_top_right
-0 0 0 wall_vertical_left
-80 0 0 wall_vertical_right
-96 0 1 floor_textured
-128 112 1 void
-144 112 1 floor_purple
-144 96 1 floor_brown
-96 48 1 door_square_left
-112 48 1 door_square_right
-128 48 1 hobbit_hole
-96 96 1 door_detailed_left
-112 96 1 door_detailed_right
-144 48 0 ladder
-64 96 0 cobweb
-128 96 0 bones
-112 112 0 skull
-0 128 0 wooden_chest
-16 128 0 guilded_wooded_chest
-32 128 0 guilded_wooded_chest_large
-48 128 0 wooden_chest_large
-64 128 0 guilded_wooded_chest_large_detailed
-80 128 0 guilded_wooded_chest_large_detailed
-96 128 1 coin
-112 128 1 small_mana_pot
-128 128 1 silver_key
-144 128 1 large_health_pot
-0 144 0 front_facing_torch
-16 144 0 left_facing_torch
-48 144 0 candle
-112 144 1 large_mana_pot
-128 144 1 small_health_pot
-144 144 1 gold_key
-96 64 1 top_door
-96 80 1 top_door_2
-64 112 1 damaging_ring_buff
+16 0 0 1 wall_horizontal
+16 80 0 1 wall_horizontal_beam_middle
+0 80 0 1 wall_beam_horizontal_top_left
+80 80 0 1 wall_horizontal_beam_top_right
+0 0 0 1 wall_vertical_left
+80 0 0 1 wall_vertical_right
+96 0 1 3 floor_textured
+128 112 1 3 void
+144 112 1 3 floor_purple
+144 96 1 3 floor_brown
+96 48 1 0 door_square_left
+112 48 1 0 door_square_right
+128 48 1 0 hobbit_hole
+96 96 1 0 door_detailed_left
+112 96 1 0 door_detailed_right
+144 48 0 1 ladder
+64 96 0 1 cobweb
+128 96 0 1 bones
+112 112 0 1 skull
+0 128 0 1 wooden_chest
+16 128 0 1guilded_wooded_chest
+32 128 0 1 guilded_wooded_chest_large
+48 128 0 1 wooden_chest_large
+64 128 0 1 guilded_wooded_chest_large_detailed
+80 128 0 1 guilded_wooded_chest_large_detailed
+96 128 1 1 coin
+112 128 1 1 small_mana_pot
+128 128 1 1 silver_key
+144 128 1 1 large_health_pot
+0 144 0 1 front_facing_torch
+16 144 0 1 left_facing_torch
+48 144 0 1 candle
+112 144 1 1 large_mana_pot
+128 144 1 1 small_health_pot
+144 144 1 1 gold_key
+96 64 1 0 top_door
+96 80 1 0 top_door_2
+64 112 1 1 damaging_ring_buff
