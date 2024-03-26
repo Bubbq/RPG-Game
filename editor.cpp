@@ -203,7 +203,7 @@ void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, 
     }
 
     // back button
-    if(GuiButton({800,48, 25, 30}, "Back")){
+    if(GuiButton({WINDOW_SIZE - 45,32, 40, 30}, "Back")){
         saveWorld(world.walls, "./levels/level" + std::to_string(cl) + "/walls.txt");
         saveWorld(world.floors, "./levels/level" + std::to_string(cl) + "/floors.txt");
         saveWorld(world.items, "./levels/level" + std::to_string(cl) + "/items.txt");
@@ -319,10 +319,11 @@ int main(){
     while(!WindowShouldClose()){
 
         BeginDrawing();
-        ClearBackground(BLACK);
+        ClearBackground(LIGHTGRAY);
 
         // case one, user has no levels saved, prompt them to create one
         if(lc == 0){
+            ClearBackground(BLACK);
             DrawText("YOU DONT HAVE ANY LEVELS TO CHOOSE FROM, CREATE ONE?", GetScreenWidth() * 0.5 - MeasureText("YOU DONT HAVE ANY LEVELS TO CHOOSE FROM, CREATE ONE?", 20) * 0.5, GetScreenHeight() * 0.5, 20, RAYWHITE);
             if(GuiButton({float(GetScreenWidth() * 0.5 - 25), float(GetScreenHeight() * 0.55), 50, 50}, "CREATE LEVEL")){
                 system("mkdir ./levels/level1");
@@ -331,8 +332,10 @@ int main(){
         }
 
         // user has levels, when they choose it will load that selected level
-        else if (cl == -1) 
-           chooseLevel(cl, lc);
+        else if (cl == -1){
+            ClearBackground(BLACK);
+            chooseLevel(cl, lc);
+        }
         
         else{
             DrawRectangle(editingArea.x, editingArea.y, editingArea.width, editingArea.height, LIGHTGRAY);

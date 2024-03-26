@@ -21,13 +21,22 @@ struct Sprite{
     std::string name;
     Vector2 pos;
     int fc;
+    // x and y speeds
     float sx;
     float sy;
 };
 
-std::vector<Sprite> worldSprites;
+struct Projectile{
+    Sprite sprite;
+    float angle;
+};
 
-void unloadTextures(){
+std::vector<Sprite> worldSprites;
+std::vector<Projectile> worldProjectiles;
+
+void unloadTextures(Texture2D BOW, Texture2D ARROW){
+    UnloadTexture(BOW);
+    UnloadTexture(ARROW);
     for(int i = 0; i < 4; i++){
         UnloadTexture(skeletonTexture[i]);
         UnloadTexture(vampireTexture[i]);
@@ -59,8 +68,8 @@ void initAnimation(){
 }
 
 // to animate world sprites
-void animate(Texture2D ARROW){
-    // inc the frame count fo every sprite, then based on its name, find the appropriate textture to draw
+void animateSprites(Texture2D ARROW){
+    // inc the frame count fo every sprite, then based on its name, find the appropriate texture to draw
     for(int i = 0; i < (int)worldSprites.size(); i++){
         worldSprites[i].fc++;
         int fp = worldSprites[i].fc / ANIMATION_SPEED;
@@ -78,15 +87,23 @@ void animate(Texture2D ARROW){
             DrawTexturePro(preistTexture[fp], {0,0,16,16}, {worldSprites[i].pos.x, worldSprites[i].pos.y, 16 * 2, 16 * 2}, {0,0}, 0, WHITE);
         else if(worldSprites[i].name == "skull") 
             DrawTexturePro(skullTexture[fp], {0,0,16,16}, {worldSprites[i].pos.x, worldSprites[i].pos.y, 16 * 2, 16 * 2}, {0,0}, 0, WHITE);
-        else if(worldSprites[i].name == "arrow")
-            DrawTexturePro(ARROW, {0,8,16,16}, {worldSprites[i].pos.x, worldSprites[i].pos.y, 32, 32}, {0,0}, 0, WHITE);
-
-        // update sprites movement  
-        if(worldSprites[i].sx != 0 && worldSprites[i].sy != 0){
-            worldSprites[i].pos.x +=  7 * worldSprites[i].sx;
-            worldSprites[i].pos.y += 7 * worldSprites[i].sy;
-        }
     } 
+}
+
+// animates all projectiles in world
+void animateProjectiles(Texture2D ARROW){
+
+    for(int i = 0; i < (int)worldProjectiles.size(); i++){
+        if(worldProjectiles[i].sprite.name == "arrow")
+            DrawTexturePro(ARROW, {0,8,16,16}, {worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, 32, 32}, {0,0}, worldProjectiles[i].angle, WHITE);
+
+        // update projectile movement
+        worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sprite.sx;
+        worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sprite.sy; 
+
+        if(worldProjectiles[i].sprite.pos.x > GetScreenWidth() || worldProjectiles[i].sprite.pos.x < 0 || worldProjectiles[i].sprite.pos.y > GetScreenHeight() || worldProjectiles[i].sprite.pos.y < 0)
+            worldProjectiles.erase(worldProjectiles.begin() + i);
+    }
 }
 
 void drawPlayer(Sprite& player, Texture2D BOW, Texture2D ARROW){
@@ -99,10 +116,6 @@ void drawPlayer(Sprite& player, Texture2D BOW, Texture2D ARROW){
     if(IsKeyDown(KEY_D))
         player.pos.x += 5;
 
-    // collisions
-
-
-
     float x = GetMouseX() - player.pos.x;
     float y = GetMouseY() - player.pos.y;
     float rotation = atan2(x, y) * -57.29578f;
@@ -112,13 +125,10 @@ void drawPlayer(Sprite& player, Texture2D BOW, Texture2D ARROW){
 
     // when user shoots bow
     if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        worldSprites.push_back({"arrow", {player.pos.x + 16, player.pos.y + 16}, 0, float(cos((rotation + 90) * DEG2RAD)), float(sin((rotation + 90) * DEG2RAD))}); 
+        worldProjectiles.push_back({{"arrow", player.pos.x + 16, player.pos.y + 16, 0, float(cos((rotation + 90) * DEG2RAD)), float(sin((rotation + 90) * DEG2RAD))}, rotation});
 }
 
 int main(){
-
-    // TODO make a projectile strut to handle the arrows and other future projectiles, literally only going to have arrows
-    // handle collisions
 
     SetTraceLogLevel(LOG_ERROR);
     InitWindow(750,750, "animation");
@@ -137,12 +147,12 @@ int main(){
         BeginDrawing();
         ClearBackground(BLACK);
         drawPlayer(worldSprites[0], BOW, ARROW);
-        animate(ARROW);
+        animateSprites(ARROW);
+        animateProjectiles(ARROW);
         EndDrawing();
     }
 
-    UnloadTexture(ARROW);
-    UnloadTexture(BOW);
-    unloadTextures();
+    unloadTextures(BOW, ARROW);
     CloseWindow();
+    return 0;
 }
