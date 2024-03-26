@@ -94,7 +94,7 @@ void animateSprites(Texture2D ARROW){
 }
 
 // animates all projectiles in world
-void animateProjectiles(Texture2D ARROW){
+void animateProjectiles(Texture2D ARROW, Camera2D camera){
 
     for(int i = 0; i < (int)worldProjectiles.size(); i++){
         if(worldProjectiles[i].sprite.name == "arrow")
@@ -104,7 +104,10 @@ void animateProjectiles(Texture2D ARROW){
         worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sprite.sx;
         worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sprite.sy; 
 
-        if(worldProjectiles[i].sprite.pos.x > GetScreenWidth() || worldProjectiles[i].sprite.pos.x < 0 || worldProjectiles[i].sprite.pos.y > GetScreenHeight() || worldProjectiles[i].sprite.pos.y < 0)
+        if(worldProjectiles[i].sprite.pos.x > camera.target.x + camera.offset.x 
+			|| worldProjectiles[i].sprite.pos.x < camera.target.x - camera.offset.x 
+			|| worldProjectiles[i].sprite.pos.y > camera.target.y + camera.offset.y 
+			|| worldProjectiles[i].sprite.pos.y < camera.target.y - camera.offset.y)
             worldProjectiles.erase(worldProjectiles.begin() + i);
     }
 }
@@ -169,7 +172,7 @@ int main(){
 			DrawRectangleRec((Rectangle){0, 0, 750, 750}, GRAY);
         		drawPlayer(worldSprites[0], BOW, ARROW);
         		animateSprites(ARROW);
-        		animateProjectiles(ARROW);
+        		animateProjectiles(ARROW, camera);
 		EndMode2D();
 		// everything outside of 2D mode is static
 		DrawFPS(0, 0);
