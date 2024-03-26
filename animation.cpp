@@ -34,6 +34,9 @@ struct Projectile{
 std::vector<Sprite> worldSprites;
 std::vector<Projectile> worldProjectiles;
 
+// adjusted mouse pos 
+Vector2 mouse = {0, 0};
+
 void unloadTextures(Texture2D BOW, Texture2D ARROW){
     UnloadTexture(BOW);
     UnloadTexture(ARROW);
@@ -116,8 +119,9 @@ void drawPlayer(Sprite& player, Texture2D BOW, Texture2D ARROW){
     if(IsKeyDown(KEY_D))
         player.pos.x += 5;
 
-    float x = GetMouseX() - player.pos.x;
-    float y = GetMouseY() - player.pos.y;
+    // use mouse pos adjusted for camera
+    float x = mouse.x - player.pos.x;
+    float y = mouse.y - player.pos.y;
     float rotation = atan2(x, y) * -57.29578f;
 
     // drawing the users bow
@@ -143,12 +147,32 @@ int main(){
     player.sx = 0;
     worldSprites.push_back(player);
 
+    // init camera
+    Camera2D camera = {0};
+    camera.target = player.pos;
+    camera.offset = (Vector2){GetScreenWidth()/2.0f, GetScreenHeight()/2.0f};
+    // camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
+
+
     while (!WindowShouldClose()) {
+	// set camera target
+	camera.target = worldSprites[0].pos;
+        camera.offset = (Vector2){GetScreenWidth()/2.0f, GetScreenHeight()/2.0f};
+
+	// mouse position must be translated to camera target
+    	mouse = GetScreenToWorld2D(GetMousePosition(), camera);
         BeginDrawing();
-        ClearBackground(BLACK);
-        drawPlayer(worldSprites[0], BOW, ARROW);
-        animateSprites(ARROW);
-        animateProjectiles(ARROW);
+        	ClearBackground(BLACK);
+		// everything in 2D mode will move according to camera
+		BeginMode2D(camera);
+			DrawRectangleRec((Rectangle){0, 0, 750, 750}, GRAY);
+        		drawPlayer(worldSprites[0], BOW, ARROW);
+        		animateSprites(ARROW);
+        		animateProjectiles(ARROW);
+		EndMode2D();
+		// everything outside of 2D mode is static
+		DrawFPS(0, 0);
         EndDrawing();
     }
 
