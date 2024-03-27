@@ -175,8 +175,15 @@ void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, 
     if(!currTile.name.empty())
         DrawTexturePro(texture, {currTile.src.x, currTile.src.y, TILE_SIZE, TILE_SIZE}, {GetMousePosition().x - 20, GetMousePosition().y - 20, 20, 20}, {0,0}, 0, WHITE);
        
+    // empty all tiles
     if(IsKeyPressed(KEY_E))
         clearTiles();
+
+    // set all tiles to void
+    if(IsKeyPressed(KEY_F))
+        for(int i = 0; i < WORLD_SIZE; i++)
+            for(int j = 0; j < WORLD_SIZE; j++) 
+                world.floors[i][j] = {{128, 112}, "void", (Element)3, 1};
 
     // get the nearest rectangle from the users mouse
     int mpx = (((int)GetMousePosition().x >> (int)log2(TILE_SIZE * SCALE)) << (int)log2(TILE_SIZE * SCALE));
