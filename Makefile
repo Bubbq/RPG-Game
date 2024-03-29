@@ -1,7 +1,7 @@
 all:
-	g++ animation.cpp -o run -lraylib
+	g++ animation.cpp tile_generation.cpp -o run -lraylib
 edit:
-	g++ editor.cpp -o run -lraylib
+	g++ editor.cpp tile_generation.cpp -o run -lraylib
 clean:
 	rm -r levels/level*
 	rm run
