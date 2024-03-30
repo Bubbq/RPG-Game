@@ -1,5 +1,3 @@
-#include <fstream>
-#include <iostream>
 #include <raylib.h>
 #include <filesystem>
 #include <raymath.h>
@@ -57,17 +55,6 @@ void displayTiles(std::vector<Tile>& allTiles, Tile& currTile)
     }
 }
 
-// empties tiles of the world
-void eraseWorld()
-{
-    for(int i = 0; i < world.walls.size(); i++)
-        world.walls[i] = {};
-    for(int i = 0; i < world.floors.size(); i++)
-        world.floors[i] = {};
-    for(int i = 0; i < world.items.size(); i++)
-        world.items[i] = {};
-}
-
 // editing the world
 void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, int& cl)
 {
@@ -83,7 +70,11 @@ void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, 
 
     // empty all tiles
     if(IsKeyPressed(KEY_E))
-        eraseWorld();
+    {
+        world.walls.clear();
+        world.floors.clear();
+        world.items.clear();
+    }
 
     // get the nearest rectangle from the users mouse
     int mpx = (((int)GetMousePosition().x >> (int)log2(SCREEN_TILE_SIZE)) << (int)log2(SCREEN_TILE_SIZE));
@@ -145,7 +136,6 @@ void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, 
                 });
                 if (it == world.items.end()) {
                     world.items.push_back({currTile.src, newPos, currTile.name, ITEM});
-                    std::cout << world.items.size() << std::endl;
                 }
             }
         }
@@ -161,40 +151,6 @@ void loadLevels(int& lc)
             if(entry.path().string().find("level"))
                 lc++;
     }
-}
-
-// reads and stores the information of every tile in a vector
-void readTiles(std::vector<Tile>& allTiles)
-{
-    std::ifstream inFile;
-    inFile.open("src/tiles.txt");
-
-    if(!inFile)
-    {
-        std::cerr << "ERROR READING TILES \n" << std::endl;
-        return;
-    }
-
-    Vector2 src;
-    std::string name;
-    int tileType;
-
-    while(inFile >> src.x >> src.y >> tileType >> name)
-        allTiles.push_back((Tile){src, {}, name, (Element)tileType});
-    
-    inFile.close();
-
-    inFile.open("src/items.txt");
-    if(!inFile)
-    {
-        std::cerr << "ERROR WHEN TRYING TO READ ITEM TILES /n";
-        return;
-    }
-    
-    while(inFile >> src.x >> src.y >> tileType >> name)
-        allTiles.push_back((Tile){src, {}, name, (Element)tileType});
-
-    inFile.close();
 }
 
 // menu for user to choose from his or her levels
@@ -305,7 +261,9 @@ int main()
             if(GuiButton({WINDOW_SIZE - 45,32, 40, 30}, "Back"))
             {
                 saveWorld(world, cl);
-                eraseWorld();
+                world.walls.clear();
+                world.floors.clear();
+                world.items.clear();
                 cl = -1;
             }
         }
