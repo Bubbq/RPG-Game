@@ -40,8 +40,7 @@ struct World{
 };
 
 // load world content from file
- void loadWorld(World&, int&);
-
+void loadWorld(World&, int&);
 void drawWorld(World&, Texture2D, Texture2D, int);
-
 void saveWorld(World&, int&);
+void readTiles(std::vector<Tile>& allTiles);

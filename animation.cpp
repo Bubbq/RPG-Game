@@ -6,6 +6,9 @@
 #include <vector>
 #include "tile_generation.h"
 
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
+
 // how fast we change each frame
 const int ANIMATION_SPEED = 20;
 
@@ -25,7 +28,6 @@ const std::string VAMPIRE_BAT_PATH = "EnemyAssets/Basic Undead Animations/Vampir
 const std::string ARROW_PATH = "asset/arrow_4.png";
 const std::string BOW_PATH = "asset/bow.png";
 
-// temporary texture of a sprite
 Texture2D TMP;
 Texture2D BOW;
 Texture2D ARROW;
@@ -46,20 +48,26 @@ Texture2D TILES;
 Texture2D ITEMS;
 
 struct Sprite{
-   std::string name;
-   Vector2 pos;
-   int fc;
-   // x and y speeds
-   float sx;
-   float sy;
+  std::string name;
+  Vector2 pos;
+  int fc;
 };
 
 struct Projectile{
-   Sprite sprite;
-   float angle;
+  Sprite sprite;
+  float angle;
+  float sx;
+  float sy;
 };
 
-std::vector<Sprite> worldSprites;
+struct Entity{
+   Sprite sprite;
+   float health;
+   float speed;
+   bool alive;
+};
+
+std::vector<Entity> worldEntity;
 std::vector<Projectile> worldProjectiles;
 
 World world;
@@ -69,221 +77,284 @@ Vector2 mouse = {0, 0};
 
 void unloadTextures()
 {
-   UnloadTexture(ITEMS);
-   UnloadTexture(TILES);
-   UnloadTexture(TMP);
-   UnloadTexture(BOW);
-   UnloadTexture(ARROW);
-   UnloadTexture(BOUND_CADAVER);
-   UnloadTexture(BRITTLE_ARCHER);
-   UnloadTexture(CARCASS_FEEDER);
-   UnloadTexture(DISMEMBERED_CRAWLER);
-   UnloadTexture(GHASTLY_EYE);
-   UnloadTexture(GIANT_ROYAL_SCARAB);
-   UnloadTexture(GRAVE_REVANENT);
-   UnloadTexture(MUTILATED_STUMBLER);
-   UnloadTexture(SAND_GHOUL);
-   UnloadTexture(SKITTERING_HAND);
-   UnloadTexture(TOXIC_HAND);
-   UnloadTexture(UNRAVELING_CRAWLER);
-   UnloadTexture(VAMPIRE_BAT);
+  UnloadTexture(ITEMS);
+  UnloadTexture(TILES);
+  UnloadTexture(TMP);
+  UnloadTexture(BOW);
+  UnloadTexture(ARROW);
+  UnloadTexture(BOUND_CADAVER);
+  UnloadTexture(BRITTLE_ARCHER);
+  UnloadTexture(CARCASS_FEEDER);
+  UnloadTexture(DISMEMBERED_CRAWLER);
+  UnloadTexture(GHASTLY_EYE);
+  UnloadTexture(GIANT_ROYAL_SCARAB);
+  UnloadTexture(GRAVE_REVANENT);
+  UnloadTexture(MUTILATED_STUMBLER);
+  UnloadTexture(SAND_GHOUL);
+  UnloadTexture(SKITTERING_HAND);
+  UnloadTexture(TOXIC_HAND);
+  UnloadTexture(UNRAVELING_CRAWLER);
+  UnloadTexture(VAMPIRE_BAT);
 }
 
 // load the textures for every mob
 void loadTextures()
 {
-    TILES = LoadTextureFromImage(LoadImage(TILE_ASSET_PATH.c_str()));
-    ITEMS = LoadTextureFromImage(LoadImage(ITEM_ASSET_PATH.c_str()));
-    BOW = LoadTextureFromImage(LoadImage(BOW_PATH.c_str()));
-    ARROW = LoadTextureFromImage(LoadImage(ARROW_PATH.c_str()));
-    BOUND_CADAVER = LoadTextureFromImage(LoadImage(BOUND_CADAVER_PATH.c_str()));
-    BRITTLE_ARCHER = LoadTextureFromImage(LoadImage(BRITTLE_ARCHER_PATH.c_str()));
-    CARCASS_FEEDER = LoadTextureFromImage(LoadImage(CARCASS_FEEDER_PATH.c_str()));
-    DISMEMBERED_CRAWLER = LoadTextureFromImage(LoadImage(DISMEMBERED_CRAWLER_PATH.c_str()));
-    GHASTLY_EYE = LoadTextureFromImage(LoadImage(GHASTLY_EYE_PATH.c_str()));
-    GIANT_ROYAL_SCARAB = LoadTextureFromImage(LoadImage(GIANT_ROYAL_SCARAB_PATH.c_str()));
-    GRAVE_REVANENT = LoadTextureFromImage(LoadImage(GRAVE_REVANENT_PATH.c_str()));
-    MUTILATED_STUMBLER = LoadTextureFromImage(LoadImage(MUTILATED_STUMBLER_PATH.c_str()));
-    SAND_GHOUL = LoadTextureFromImage(LoadImage(SAND_GHOUL_PATH.c_str()));
-    SKITTERING_HAND = LoadTextureFromImage(LoadImage(SKITTERING_HAND_PATH.c_str()));
-    TOXIC_HAND = LoadTextureFromImage(LoadImage(TOXIC_HAND_PATH.c_str()));
-    UNRAVELING_CRAWLER = LoadTextureFromImage(LoadImage(UNRAVELING_CRAWLER_PATH.c_str()));
-    VAMPIRE_BAT = LoadTextureFromImage(LoadImage(VAMPIRE_BAT_PATH.c_str()));
+   TILES = LoadTextureFromImage(LoadImage(TILE_ASSET_PATH.c_str()));
+   ITEMS = LoadTextureFromImage(LoadImage(ITEM_ASSET_PATH.c_str()));
+   BOW = LoadTextureFromImage(LoadImage(BOW_PATH.c_str()));
+   ARROW = LoadTextureFromImage(LoadImage(ARROW_PATH.c_str()));
+   BOUND_CADAVER = LoadTextureFromImage(LoadImage(BOUND_CADAVER_PATH.c_str()));
+   BRITTLE_ARCHER = LoadTextureFromImage(LoadImage(BRITTLE_ARCHER_PATH.c_str()));
+   CARCASS_FEEDER = LoadTextureFromImage(LoadImage(CARCASS_FEEDER_PATH.c_str()));
+   DISMEMBERED_CRAWLER = LoadTextureFromImage(LoadImage(DISMEMBERED_CRAWLER_PATH.c_str()));
+   GHASTLY_EYE = LoadTextureFromImage(LoadImage(GHASTLY_EYE_PATH.c_str()));
+   GIANT_ROYAL_SCARAB = LoadTextureFromImage(LoadImage(GIANT_ROYAL_SCARAB_PATH.c_str()));
+   GRAVE_REVANENT = LoadTextureFromImage(LoadImage(GRAVE_REVANENT_PATH.c_str()));
+   MUTILATED_STUMBLER = LoadTextureFromImage(LoadImage(MUTILATED_STUMBLER_PATH.c_str()));
+   SAND_GHOUL = LoadTextureFromImage(LoadImage(SAND_GHOUL_PATH.c_str()));
+   SKITTERING_HAND = LoadTextureFromImage(LoadImage(SKITTERING_HAND_PATH.c_str()));
+   TOXIC_HAND = LoadTextureFromImage(LoadImage(TOXIC_HAND_PATH.c_str()));
+   UNRAVELING_CRAWLER = LoadTextureFromImage(LoadImage(UNRAVELING_CRAWLER_PATH.c_str()));
+   VAMPIRE_BAT = LoadTextureFromImage(LoadImage(VAMPIRE_BAT_PATH.c_str()));
 }
- 
-// to animate world sprites, POSSIBLE ERROR, NOT UNLOADING THE TMP TEXTURE
+// to animate world sprites
 void animateSprites()
 {
-    // finding  appropriate frame position
-    for(int i = 0; i < worldSprites.size(); i++){
-        worldSprites[i].fc++;
-        int fp = worldSprites[i].fc / ANIMATION_SPEED;
-        if(fp > 3){
-            fp = 0;
-            worldSprites[i].fc = 0;
-        }
+   // finding  appropriate frame position
+   for(int i = 0; i < worldEntity.size(); i++)
+   {
+       worldEntity[i].sprite.fc++;
+       int fp = worldEntity[i].sprite.fc / ANIMATION_SPEED;
+       if(fp > 3){
+           fp = 0;
+           worldEntity[i].sprite.fc = 0;
+       }
 
-        // drawing said textures
-        if(worldSprites[i].name == "bounded_cadaver")
-            TMP = BOUND_CADAVER;
-        else if(worldSprites[i].name == "brittle_archer")
-            TMP = BRITTLE_ARCHER;
-        else if(worldSprites[i].name == "carcass_feeder")
-            TMP = CARCASS_FEEDER;
-        else if(worldSprites[i].name == "dismembered_crawler")
-            TMP = DISMEMBERED_CRAWLER;
-        else if(worldSprites[i].name == "ghastly_eye")
-            TMP = GHASTLY_EYE;
-        else if(worldSprites[i].name == "giant_royal_scarab")
-            TMP = GIANT_ROYAL_SCARAB;
-        else if(worldSprites[i].name == "grave_revanent")
-            TMP = GRAVE_REVANENT;
-        else if(worldSprites[i].name == "mutilated_stumbler")
-            TMP = MUTILATED_STUMBLER;
-        else if(worldSprites[i].name == "sand_ghoul")
-            TMP = SAND_GHOUL;
-        else if(worldSprites[i].name == "toxic_hand")
-            TMP = SKITTERING_HAND;
-        else if(worldSprites[i].name == "unraveling_crawler")
-            TMP = UNRAVELING_CRAWLER;
-        else if(worldSprites[i].name == "vampire_bat")
-            TMP = VAMPIRE_BAT;
+       // drawing said textures
+       if(worldEntity[i].sprite.name == "bounded_cadaver")
+           TMP = BOUND_CADAVER;
+       else if(worldEntity[i].sprite.name == "brittle_archer")
+           TMP = BRITTLE_ARCHER;
+       else if(worldEntity[i].sprite.name == "carcass_feeder")
+           TMP = CARCASS_FEEDER;
+       else if(worldEntity[i].sprite.name == "dismembered_crawler")
+           TMP = DISMEMBERED_CRAWLER;
+       else if(worldEntity[i].sprite.name == "ghastly_eye")
+           TMP = GHASTLY_EYE;
+       else if(worldEntity[i].sprite.name == "giant_royal_scarab")
+           TMP = GIANT_ROYAL_SCARAB;
+       else if(worldEntity[i].sprite.name == "grave_revanent")
+           TMP = GRAVE_REVANENT;
+       else if(worldEntity[i].sprite.name == "mutilated_stumbler")
+           TMP = MUTILATED_STUMBLER;
+       else if(worldEntity[i].sprite.name == "sand_ghoul")
+           TMP = SAND_GHOUL;
+       else if(worldEntity[i].sprite.name == "toxic_hand")
+           TMP = SKITTERING_HAND;
+       else if(worldEntity[i].sprite.name == "unraveling_crawler")
+           TMP = UNRAVELING_CRAWLER;
+       else if(worldEntity[i].sprite.name == "vampire_bat")
+           TMP = VAMPIRE_BAT;
 
-        // draw the sprite with its proper animation frame
-        DrawTexturePro(TMP, {float(fp * TILE_SIZE), 0, TILE_SIZE, TILE_SIZE}, {worldSprites[i].pos.x, worldSprites[i].pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, 0, WHITE);       
-    }
+       // draw the sprite with its proper animation frame
+       DrawTexturePro(TMP, {float(fp * TILE_SIZE), 0, TILE_SIZE, TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, 0, WHITE);      
+   }
 }
 
 // animates all projectiles in world
 void animateProjectiles(Camera2D camera)
 {
-    for(int i = 0; i < worldProjectiles.size(); i++)
-    {
-        // finding the right projectile to draw
-        if(worldProjectiles[i].sprite.name == "arrow")
-            TMP = ARROW;
-        
-        // drawing the ith sprite
-        DrawTexturePro(TMP, {0,8, TILE_SIZE,TILE_SIZE}, {worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, worldProjectiles[i].angle, WHITE);
-        
-        // update projectile movement
-        worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sprite.sx;
-        worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sprite.sy;
-            
-        // removal when projectile s out of the screen
-        if(worldProjectiles[i].sprite.pos.x > camera.target.x + camera.offset.x
-            || worldProjectiles[i].sprite.pos.x < camera.target.x - camera.offset.x
-            || worldProjectiles[i].sprite.pos.y > camera.target.y + camera.offset.y
-            || worldProjectiles[i].sprite.pos.y < camera.target.y - camera.offset.y)
-            worldProjectiles.erase(worldProjectiles.begin() + i);
-    }
+   for(int i = 0; i < worldProjectiles.size(); i++)
+   {
+       // finding the right projectile to draw
+       if(worldProjectiles[i].sprite.name == "arrow")
+           TMP = ARROW;
+      
+       // drawing the ith sprite
+       DrawTexturePro(TMP, {0,8, TILE_SIZE,TILE_SIZE}, {worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, worldProjectiles[i].angle, WHITE);
+      
+       // update projectile movement
+       worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sx;
+       worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sy;
+ 
+       // removal when projectile s out of the screen
+       if(worldProjectiles[i].sprite.pos.x > camera.target.x + camera.offset.x
+           || worldProjectiles[i].sprite.pos.x < camera.target.x - camera.offset.x
+           || worldProjectiles[i].sprite.pos.y > camera.target.y + camera.offset.y
+           || worldProjectiles[i].sprite.pos.y < camera.target.y - camera.offset.y)
+           worldProjectiles.erase(worldProjectiles.begin() + i);
+      
+       // colliding with walls
+       for(int k = 0; k < world.walls.size(); k++){
+           if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE,SCREEN_TILE_SIZE}, {world.walls[k].screenPos.x, world.walls[k].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+               if(!worldProjectiles.empty())
+                   worldProjectiles.erase(worldProjectiles.begin() + i);
+       }
+
+       // deal damage to enemies
+       for(int j = 1; j < worldEntity.size(); j++){
+           if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, TILE_SIZE, TILE_SIZE}, {worldEntity[j].sprite.pos.x, worldEntity[j].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && !worldProjectiles.empty())
+           {
+               worldEntity[j].health -= 100;
+               if(worldEntity[j].health <= 0)
+               {
+                   worldProjectiles.erase(worldProjectiles.begin() + i);
+                   worldEntity.erase(worldEntity.begin() + j);
+               }
+           }
+       }
+   }
 }
 
-void drawPlayer(Sprite& player)
+void updateMobs()
 {
-    // movement and collisions
-    if(IsKeyDown(KEY_W))
-    {
-        player.pos.y -= 5;
-        for(int i = 0; i < world.walls.size(); i++)
-            if(CheckCollisionPointRec(player.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-                player.pos.y += 5;
-    }
+   // go through every entity and make them move towards the player
+   for(int i = 1; i < worldEntity.size(); i++)
+   {
+       if(worldEntity[i].sprite.pos.x < worldEntity[0].sprite.pos.x)
+           worldEntity[i].sprite.pos.x += worldEntity[i].speed;
+       if(worldEntity[i].sprite.pos.x > worldEntity[0].sprite.pos.x)
+           worldEntity[i].sprite.pos.x -= worldEntity[i].speed;
+       if(worldEntity[i].sprite.pos.y < worldEntity[0].sprite.pos.y)
+           worldEntity[i].sprite.pos.y += worldEntity[i].speed;
+       if(worldEntity[i].sprite.pos.y > worldEntity[0].sprite.pos.y)
+           worldEntity[i].sprite.pos.y -= worldEntity[i].speed;
+   }
+}
 
-    if(IsKeyDown(KEY_A))
-    {
-        player.pos.x -= 5;
-        for(int i = 0; i < world.walls.size(); i++)
-            if(CheckCollisionPointRec(player.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-                player.pos.x += 5;
-    }
+void updatePlayer(Entity& player)
+{
+   // movement and collisions
+   if(IsKeyDown(KEY_W))
+   {
+       player.sprite.pos.y -= 5;
+       for(int i = 0; i < world.walls.size(); i++)
+           if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+               player.sprite.pos.y += 5;
+   }
 
-    if(IsKeyDown(KEY_S))
-    {
-        player.pos.y += 5;
-        for(int i = 0; i < world.walls.size(); i++)
-            if(CheckCollisionPointRec({player.pos.x, player.pos.y + TILE_SIZE}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-                player.pos.y -= 5;
-    }
+   if(IsKeyDown(KEY_A))
+   {
+       player.sprite.pos.x -= 5;
+       for(int i = 0; i < world.walls.size(); i++)
+           if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+               player.sprite.pos.x += 5;
+   }
 
-    if(IsKeyDown(KEY_D))
-    {
-        player.pos.x += 5;
-        for(int i = 0; i < world.walls.size(); i++)
-            if(CheckCollisionPointRec({player.pos.x + TILE_SIZE, player.pos.y}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-                player.pos.x -= 5;
-    }
+   if(IsKeyDown(KEY_S))
+   {
+       player.sprite.pos.y += 5;
+       for(int i = 0; i < world.walls.size(); i++)
+           if(CheckCollisionPointRec({player.sprite.pos.x, player.sprite.pos.y + TILE_SIZE}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+               player.sprite.pos.y -= 5;
+   }
 
-    // use mouse pos adjusted for camera
-    float x = mouse.x - player.pos.x;
-    float y = mouse.y - player.pos.y;
-    float rotation = atan2(x, y) * -57.29578f;
+   if(IsKeyDown(KEY_D))
+   {
+       player.sprite.pos.x += 5;
+       for(int i = 0; i < world.walls.size(); i++)
+           if(CheckCollisionPointRec({player.sprite.pos.x + TILE_SIZE, player.sprite.pos.y}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+               player.sprite.pos.x -= 5;
+   }
 
-    // drawing the users bow
-    DrawTexturePro(BOW, {0,0,TILE_SIZE, TILE_SIZE}, {float(player.pos.x + cos((rotation + 45) * DEG2RAD) * SCREEN_TILE_SIZE) + TILE_SIZE, float(player.pos.y + sin((rotation + 45) * DEG2RAD) * SCREEN_TILE_SIZE) + TILE_SIZE,SCREEN_TILE_SIZE,SCREEN_TILE_SIZE}, {0,0}, rotation + 135, WHITE);
+   // use mouse pos adjusted for camera
+   float x = mouse.x - player.sprite.pos.x;
+   float y = mouse.y - player.sprite.pos.y;
+   float rotation = atan2(x, y) * -57.29578f;
 
-    // when user shoots bow
-    if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        worldProjectiles.push_back({{"arrow", player.pos.x + 16 , player.pos.y + 16, 0, float(cos((rotation + 90) * DEG2RAD)), float(sin((rotation + 90) * DEG2RAD))}, rotation});
+   // drawing the users bow
+   DrawTexturePro(BOW, {0,0,TILE_SIZE, TILE_SIZE}, {float(player.sprite.pos.x + cos((rotation + 45) * DEG2RAD) * SCREEN_TILE_SIZE) + TILE_SIZE, float(player.sprite.pos.y + sin((rotation + 45) * DEG2RAD) * SCREEN_TILE_SIZE) + TILE_SIZE,SCREEN_TILE_SIZE,SCREEN_TILE_SIZE}, {0,0}, rotation + 135, WHITE);
+
+   // when user shoots bow
+   if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+   {
+       Sprite tmp = {"arrow", {player.sprite.pos.x, player.sprite.pos.y}, 0};
+       float sx = cos((rotation + 90) * DEG2RAD);
+       float sy = sin((rotation + 90) * DEG2RAD);
+       Projectile pro = {tmp, rotation, sx, sy};
+       worldProjectiles.push_back(pro);
+   }
+
+   // getting hit by enemy
+   for(int i = 1; i < worldEntity.size(); i++)
+       if(CheckCollisionRecs({player.sprite.pos.x, player.sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE})) 
+           player.alive = false;
 }
 
 // returns the spawn point of the player in the ith level
-Vector2 getSpawn(int cl)
+Vector2 getSpawn(int& cl)
 {
-   std::ifstream inFile;
-   inFile.open("levels/level" + std::to_string(cl) + "/spawn.txt");
-   if(!inFile)
-   {
-    std::cerr << "ERROR GETTING SPAWN POINT \n";
-    return {0,0};
-   }
-   Vector2 spawnPoint;
-   inFile >> spawnPoint.x >> spawnPoint.y;
-   inFile.close();
-   return spawnPoint;
+  std::ifstream inFile;
+  inFile.open("levels/level" + std::to_string(cl) + "/spawn.txt");
+  if(!inFile)
+  {
+   std::cerr << "ERROR GETTING SPAWN POINT \n";
+   return {0,0};
+  }
+  Vector2 spawnPoint;
+  inFile >> spawnPoint.x >> spawnPoint.y;
+  inFile.close();
+  return spawnPoint;
 }
 
 int main()
 {
-   SetTraceLogLevel(LOG_ERROR);
-   InitWindow(900,900, "animation");
-   SetTargetFPS(60);
-   int cl = 1;
-   loadWorld(world, cl);
-   loadTextures();
-   Sprite player = {"vampire_bat", getSpawn(cl), 0,0,0};
-   worldSprites.push_back(player);
+  SetTraceLogLevel(LOG_ERROR);
+  InitWindow(900,900, "animation");
+  SetTargetFPS(60);
+  int cl = 1;
+  loadWorld(world, cl);
+  loadTextures();
+  Entity player = {{"grave_revanent", getSpawn(cl), 0}, 100, 5, true};
+  worldEntity.push_back(player);
+  // init camera
+  Camera2D camera = {0};
+  camera.target = player.sprite.pos;
+  camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
+  camera.zoom = 1.5f;
 
-   // init camera
-   Camera2D camera = {0};
-   camera.target = player.pos;
-   camera.offset = (Vector2){GetScreenWidth()/2.0f, GetScreenHeight()/2.0f};
-   camera.zoom = 1.5f;
+  while (!WindowShouldClose())
+  {
+      // update camera target
+      camera.target = worldEntity[0].sprite.pos;
+      camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
 
-   while (!WindowShouldClose())
-   {
-        // update camera target
-        camera.target = worldSprites[0].pos;
-        camera.offset = (Vector2){GetScreenWidth()/2.0f, GetScreenHeight()/2.0f};
-
-        // mouse position must be translated to camera target
-        mouse = GetScreenToWorld2D(GetMousePosition(), camera);
-        BeginDrawing();
-            ClearBackground(BLACK);
-            // everything in 2D mode will move according to camera
-            BeginMode2D(camera);
-                drawWorld(world, TILES, ITEMS, 0);
-                drawPlayer(worldSprites[0]);
-                animateSprites();
-                animateProjectiles(camera);
-            EndMode2D();
-            // everything outside of 2D mode is static
-            DrawFPS(0, 0);
-        EndDrawing();
-   }
-   unloadTextures();
-   CloseWindow();
-   return 0;
+      // mouse position must be translated to camera target
+      mouse = GetScreenToWorld2D(GetMousePosition(), camera);
+      BeginDrawing();
+          ClearBackground(BLACK);
+          // everything in 2D mode will move according to camera
+          BeginMode2D(camera);
+              if(worldEntity[0].alive)
+              {
+                  drawWorld(world, TILES, ITEMS, 0);
+                  updatePlayer(worldEntity[0]);
+                  updateMobs();
+                  if(IsKeyDown(KEY_E))
+                      worldEntity.push_back({{"dismembered_crawler", {getSpawn(cl).x - 60, getSpawn(cl).y + 150}, 0}, 100, 1});
+                  animateSprites();
+                  animateProjectiles(camera);
+              }
+              else
+              {
+                  ClearBackground(GRAY);
+                  DrawText("YOU DIED, TRY AGAIN? (PRESS ENTER)", player.sprite.pos.x - MeasureText("YOU DIED, TRY AGAIN? (PRESS ENTER)", 20) / 2.0f, player.sprite.pos.y, 20, RED);
+                  if(IsKeyPressed(KEY_ENTER))
+                  {
+                   worldEntity[0].alive = true;
+                   worldEntity.clear();
+                   worldEntity.push_back(player);
+                  }
+              }
+          EndMode2D();
+          // everything outside of 2D mode is static
+          DrawFPS(0, 0);
+      EndDrawing();
+  }
+  unloadTextures();
+  CloseWindow();
+  return 0;
 }
 
 

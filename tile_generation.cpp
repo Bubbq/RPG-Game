@@ -143,3 +143,37 @@ void saveWorld(World& world, int& cl)
 
     outFile.close();
 }
+
+// reads and stores the information of every tile in a vector
+void readTiles(std::vector<Tile>& allTiles)
+{
+    std::ifstream inFile;
+    inFile.open("src/tiles.txt");
+
+    if(!inFile)
+    {
+        std::cerr << "ERROR READING TILES \n" << std::endl;
+        return;
+    }
+
+    Vector2 src;
+    std::string name;
+    int tileType;
+
+    while(inFile >> src.x >> src.y >> tileType >> name)
+        allTiles.push_back((Tile){src, {}, name, (Element)tileType});
+    
+    inFile.close();
+
+    inFile.open("src/items.txt");
+    if(!inFile)
+    {
+        std::cerr << "ERROR WHEN TRYING TO READ ITEM TILES /n";
+        return;
+    }
+    
+    while(inFile >> src.x >> src.y >> tileType >> name)
+        allTiles.push_back((Tile){src, {}, name, (Element)tileType});
+
+    inFile.close();
+}
