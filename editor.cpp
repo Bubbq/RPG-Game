@@ -55,17 +55,6 @@ void displayTiles(std::vector<Tile>& allTiles, Tile& currTile)
     }
 }
 
-// empties tiles of the world
-void eraseWorld()
-{
-    for(int i = 0; i < world.walls.size(); i++)
-        world.walls[i] = {};
-    for(int i = 0; i < world.floors.size(); i++)
-        world.floors[i] = {};
-    for(int i = 0; i < world.items.size(); i++)
-        world.items[i] = {};
-}
-
 // editing the world
 void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, int& cl)
 {
@@ -81,7 +70,11 @@ void editWorld(std::vector<Tile>& allTiles, Tile& currTile, Rectangle& mapArea, 
 
     // empty all tiles
     if(IsKeyPressed(KEY_E))
-        eraseWorld();
+    {
+        world.walls.clear();
+        world.floors.clear();
+        world.items.clear();
+    }
 
     // get the nearest rectangle from the users mouse
     int mpx = (((int)GetMousePosition().x >> (int)log2(SCREEN_TILE_SIZE)) << (int)log2(SCREEN_TILE_SIZE));
@@ -268,7 +261,9 @@ int main()
             if(GuiButton({WINDOW_SIZE - 45,32, 40, 30}, "Back"))
             {
                 saveWorld(world, cl);
-                eraseWorld();
+                world.walls.clear();
+                world.floors.clear();
+                world.items.clear();
                 cl = -1;
             }
         }

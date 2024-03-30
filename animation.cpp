@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <raylib.h>
@@ -11,6 +12,7 @@
 
 // how fast we change each frame
 const int ANIMATION_SPEED = 20;
+int SPAWN = 60;
 
 const std::string BOUND_CADAVER_PATH = "EnemyAssets/Basic Undead Animations/Bound Cadaver/BoundCadaver.png";
 const std::string BRITTLE_ARCHER_PATH = "EnemyAssets/Basic Undead Animations/Brittle Archer/BrittleArcher.png";
@@ -47,6 +49,14 @@ Texture2D VAMPIRE_BAT;
 Texture2D TILES;
 Texture2D ITEMS;
 
+struct Timer {
+	double startTime;   // Start time (seconds)
+	double lifeTime;    // Lifetime (seconds)
+};
+
+Timer spawnTimer;
+Timer hitTimer;
+
 struct Sprite{
   std::string name;
   Vector2 pos;
@@ -74,6 +84,16 @@ World world;
 
 // adjusted mouse pos
 Vector2 mouse = {0, 0};
+void StartTimer(Timer *timer, double lifetime)
+{
+	timer->startTime = GetTime();
+	timer->lifeTime = lifetime;
+}
+
+bool TimerDone(Timer timer)
+{
+	return GetTime() - timer.startTime >= timer.lifeTime;
+}
 
 void unloadTextures()
 {
@@ -124,41 +144,41 @@ void animateSprites()
    // finding  appropriate frame position
    for(int i = 0; i < worldEntity.size(); i++)
    {
-       worldEntity[i].sprite.fc++;
-       int fp = worldEntity[i].sprite.fc / ANIMATION_SPEED;
-       if(fp > 3){
-           fp = 0;
-           worldEntity[i].sprite.fc = 0;
-       }
+	   worldEntity[i].sprite.fc++;
+	   int fp = worldEntity[i].sprite.fc / ANIMATION_SPEED;
+	   if(fp > 3){
+		   fp = 0;
+		   worldEntity[i].sprite.fc = 0;
+	   }
 
-       // drawing said textures
-       if(worldEntity[i].sprite.name == "bounded_cadaver")
-           TMP = BOUND_CADAVER;
-       else if(worldEntity[i].sprite.name == "brittle_archer")
-           TMP = BRITTLE_ARCHER;
-       else if(worldEntity[i].sprite.name == "carcass_feeder")
-           TMP = CARCASS_FEEDER;
-       else if(worldEntity[i].sprite.name == "dismembered_crawler")
-           TMP = DISMEMBERED_CRAWLER;
-       else if(worldEntity[i].sprite.name == "ghastly_eye")
-           TMP = GHASTLY_EYE;
-       else if(worldEntity[i].sprite.name == "giant_royal_scarab")
-           TMP = GIANT_ROYAL_SCARAB;
-       else if(worldEntity[i].sprite.name == "grave_revanent")
-           TMP = GRAVE_REVANENT;
-       else if(worldEntity[i].sprite.name == "mutilated_stumbler")
-           TMP = MUTILATED_STUMBLER;
-       else if(worldEntity[i].sprite.name == "sand_ghoul")
-           TMP = SAND_GHOUL;
-       else if(worldEntity[i].sprite.name == "toxic_hand")
-           TMP = SKITTERING_HAND;
-       else if(worldEntity[i].sprite.name == "unraveling_crawler")
-           TMP = UNRAVELING_CRAWLER;
-       else if(worldEntity[i].sprite.name == "vampire_bat")
-           TMP = VAMPIRE_BAT;
+	   // drawing said textures
+	   if(worldEntity[i].sprite.name == "bounded_cadaver")
+		   TMP = BOUND_CADAVER;
+	   else if(worldEntity[i].sprite.name == "brittle_archer")
+		   TMP = BRITTLE_ARCHER;
+	   else if(worldEntity[i].sprite.name == "carcass_feeder")
+		   TMP = CARCASS_FEEDER;
+	   else if(worldEntity[i].sprite.name == "dismembered_crawler")
+		   TMP = DISMEMBERED_CRAWLER;
+	   else if(worldEntity[i].sprite.name == "ghastly_eye")
+		   TMP = GHASTLY_EYE;
+	   else if(worldEntity[i].sprite.name == "giant_royal_scarab")
+		   TMP = GIANT_ROYAL_SCARAB;
+	   else if(worldEntity[i].sprite.name == "grave_revanent")
+		   TMP = GRAVE_REVANENT;
+	   else if(worldEntity[i].sprite.name == "mutilated_stumbler")
+		   TMP = MUTILATED_STUMBLER;
+	   else if(worldEntity[i].sprite.name == "sand_ghoul")
+		   TMP = SAND_GHOUL;
+	   else if(worldEntity[i].sprite.name == "toxic_hand")
+		   TMP = SKITTERING_HAND;
+	   else if(worldEntity[i].sprite.name == "unraveling_crawler")
+		   TMP = UNRAVELING_CRAWLER;
+	   else if(worldEntity[i].sprite.name == "vampire_bat")
+		   TMP = VAMPIRE_BAT;
 
-       // draw the sprite with its proper animation frame
-       DrawTexturePro(TMP, {float(fp * TILE_SIZE), 0, TILE_SIZE, TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, 0, WHITE);      
+	   // draw the sprite with its proper animation frame
+	   DrawTexturePro(TMP, {float(fp * TILE_SIZE), 0, TILE_SIZE, TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, 0, WHITE);      
    }
 }
 
@@ -167,43 +187,43 @@ void animateProjectiles(Camera2D camera)
 {
    for(int i = 0; i < worldProjectiles.size(); i++)
    {
-       // finding the right projectile to draw
-       if(worldProjectiles[i].sprite.name == "arrow")
-           TMP = ARROW;
-      
-       // drawing the ith sprite
-       DrawTexturePro(TMP, {0,8, TILE_SIZE,TILE_SIZE}, {worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, worldProjectiles[i].angle, WHITE);
-      
-       // update projectile movement
-       worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sx;
-       worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sy;
+	   // finding the right projectile to draw
+	   if(worldProjectiles[i].sprite.name == "arrow")
+		   TMP = ARROW;
+	  
+	   // drawing the ith sprite
+	   DrawTexturePro(TMP, {0,8, TILE_SIZE,TILE_SIZE}, {worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {0,0}, worldProjectiles[i].angle, WHITE);
+	  
+	   // update projectile movement
+	   worldProjectiles[i].sprite.pos.x += 10 * worldProjectiles[i].sx;
+	   worldProjectiles[i].sprite.pos.y += 10 * worldProjectiles[i].sy;
  
-       // removal when projectile s out of the screen
-       if(worldProjectiles[i].sprite.pos.x > camera.target.x + camera.offset.x
-           || worldProjectiles[i].sprite.pos.x < camera.target.x - camera.offset.x
-           || worldProjectiles[i].sprite.pos.y > camera.target.y + camera.offset.y
-           || worldProjectiles[i].sprite.pos.y < camera.target.y - camera.offset.y)
-           worldProjectiles.erase(worldProjectiles.begin() + i);
-      
-       // colliding with walls
-       for(int k = 0; k < world.walls.size(); k++){
-           if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE,SCREEN_TILE_SIZE}, {world.walls[k].screenPos.x, world.walls[k].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-               if(!worldProjectiles.empty())
-                   worldProjectiles.erase(worldProjectiles.begin() + i);
-       }
+	   // removal when projectile s out of the screen
+	   if(worldProjectiles[i].sprite.pos.x > camera.target.x + camera.offset.x
+		   || worldProjectiles[i].sprite.pos.x < camera.target.x - camera.offset.x
+		   || worldProjectiles[i].sprite.pos.y > camera.target.y + camera.offset.y
+		   || worldProjectiles[i].sprite.pos.y < camera.target.y - camera.offset.y)
+		   worldProjectiles.erase(worldProjectiles.begin() + i);
+	  
+	   // colliding with walls
+	   for(int k = 0; k < world.walls.size(); k++){
+		   if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, SCREEN_TILE_SIZE,SCREEN_TILE_SIZE}, {world.walls[k].screenPos.x, world.walls[k].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   if(!worldProjectiles.empty())
+				   worldProjectiles.erase(worldProjectiles.begin() + i);
+	   }
 
-       // deal damage to enemies
-       for(int j = 1; j < worldEntity.size(); j++){
-           if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, TILE_SIZE, TILE_SIZE}, {worldEntity[j].sprite.pos.x, worldEntity[j].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && !worldProjectiles.empty())
-           {
-               worldEntity[j].health -= 100;
-               if(worldEntity[j].health <= 0)
-               {
-                   worldProjectiles.erase(worldProjectiles.begin() + i);
-                   worldEntity.erase(worldEntity.begin() + j);
-               }
-           }
-       }
+	   // deal damage to enemies
+	   for(int j = 1; j < worldEntity.size(); j++){
+		   if(CheckCollisionRecs({worldProjectiles[i].sprite.pos.x, worldProjectiles[i].sprite.pos.y, TILE_SIZE, TILE_SIZE}, {worldEntity[j].sprite.pos.x, worldEntity[j].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && !worldProjectiles.empty())
+		   {
+			   worldEntity[j].health -= 100;
+			   if(worldEntity[j].health <= 0)
+			   {
+				   worldProjectiles.erase(worldProjectiles.begin() + i);
+				   worldEntity.erase(worldEntity.begin() + j);
+			   }
+		   }
+	   }
    }
 }
 
@@ -212,14 +232,45 @@ void updateMobs()
    // go through every entity and make them move towards the player
    for(int i = 1; i < worldEntity.size(); i++)
    {
-       if(worldEntity[i].sprite.pos.x < worldEntity[0].sprite.pos.x)
-           worldEntity[i].sprite.pos.x += worldEntity[i].speed;
-       if(worldEntity[i].sprite.pos.x > worldEntity[0].sprite.pos.x)
-           worldEntity[i].sprite.pos.x -= worldEntity[i].speed;
-       if(worldEntity[i].sprite.pos.y < worldEntity[0].sprite.pos.y)
-           worldEntity[i].sprite.pos.y += worldEntity[i].speed;
-       if(worldEntity[i].sprite.pos.y > worldEntity[0].sprite.pos.y)
-           worldEntity[i].sprite.pos.y -= worldEntity[i].speed;
+	   if(worldEntity[i].sprite.pos.x < worldEntity[0].sprite.pos.x)
+	   {
+		   worldEntity[i].sprite.pos.x += worldEntity[i].speed;
+		   for(int j = 0; j < world.walls.size(); j++){
+			
+				if(CheckCollisionRecs({worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {world.walls[j].screenPos.x, world.walls[j].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   		worldEntity[i].sprite.pos.x -= worldEntity[i].speed;
+		   }
+	   }
+	   if(worldEntity[i].sprite.pos.x > worldEntity[0].sprite.pos.x)
+	   {
+		   worldEntity[i].sprite.pos.x -= worldEntity[i].speed;
+			for(int j = 0; j < world.walls.size(); j++)
+			{
+
+				if(CheckCollisionRecs({worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {world.walls[j].screenPos.x, world.walls[j].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   		worldEntity[i].sprite.pos.x += worldEntity[i].speed;
+			}
+	   }
+	   if(worldEntity[i].sprite.pos.y < worldEntity[0].sprite.pos.y)
+		{
+		   worldEntity[i].sprite.pos.y += worldEntity[i].speed;
+			for(int j = 0; j < world.walls.size(); j++)
+			{
+
+				if(CheckCollisionRecs({worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {world.walls[j].screenPos.x, world.walls[j].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   		worldEntity[i].sprite.pos.y -= worldEntity[i].speed;
+			}
+	   }
+	   if(worldEntity[i].sprite.pos.y > worldEntity[0].sprite.pos.y)
+		{
+		   worldEntity[i].sprite.pos.y -= worldEntity[i].speed;
+			for(int j = 0; j < world.walls.size(); j++)
+			{
+
+				if(CheckCollisionRecs({worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {world.walls[j].screenPos.x, world.walls[j].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   		worldEntity[i].sprite.pos.y += worldEntity[i].speed;
+			}
+	   }
    }
 }
 
@@ -228,34 +279,34 @@ void updatePlayer(Entity& player)
    // movement and collisions
    if(IsKeyDown(KEY_W))
    {
-       player.sprite.pos.y -= 5;
-       for(int i = 0; i < world.walls.size(); i++)
-           if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-               player.sprite.pos.y += 5;
+	   player.sprite.pos.y -= 5;
+	   for(int i = 0; i < world.walls.size(); i++)
+		   if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   player.sprite.pos.y += 5;
    }
 
    if(IsKeyDown(KEY_A))
    {
-       player.sprite.pos.x -= 5;
-       for(int i = 0; i < world.walls.size(); i++)
-           if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-               player.sprite.pos.x += 5;
+	   player.sprite.pos.x -= 5;
+	   for(int i = 0; i < world.walls.size(); i++)
+		   if(CheckCollisionPointRec(player.sprite.pos, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   player.sprite.pos.x += 5;
    }
 
    if(IsKeyDown(KEY_S))
    {
-       player.sprite.pos.y += 5;
-       for(int i = 0; i < world.walls.size(); i++)
-           if(CheckCollisionPointRec({player.sprite.pos.x, player.sprite.pos.y + TILE_SIZE}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-               player.sprite.pos.y -= 5;
+	   player.sprite.pos.y += 5;
+	   for(int i = 0; i < world.walls.size(); i++)
+		   if(CheckCollisionPointRec({player.sprite.pos.x, player.sprite.pos.y + TILE_SIZE}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   player.sprite.pos.y -= 5;
    }
 
    if(IsKeyDown(KEY_D))
    {
-       player.sprite.pos.x += 5;
-       for(int i = 0; i < world.walls.size(); i++)
-           if(CheckCollisionPointRec({player.sprite.pos.x + TILE_SIZE, player.sprite.pos.y}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-               player.sprite.pos.x -= 5;
+	   player.sprite.pos.x += 5;
+	   for(int i = 0; i < world.walls.size(); i++)
+		   if(CheckCollisionPointRec({player.sprite.pos.x + TILE_SIZE, player.sprite.pos.y}, {world.walls[i].screenPos.x, world.walls[i].screenPos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+			   player.sprite.pos.x -= 5;
    }
 
    // use mouse pos adjusted for camera
@@ -269,17 +320,61 @@ void updatePlayer(Entity& player)
    // when user shoots bow
    if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
    {
-       Sprite tmp = {"arrow", {player.sprite.pos.x, player.sprite.pos.y}, 0};
-       float sx = cos((rotation + 90) * DEG2RAD);
-       float sy = sin((rotation + 90) * DEG2RAD);
-       Projectile pro = {tmp, rotation, sx, sy};
-       worldProjectiles.push_back(pro);
+	   Sprite tmp = {"arrow", {player.sprite.pos.x, player.sprite.pos.y}, 0};
+	   float sx = cos((rotation + 90) * DEG2RAD);
+	   float sy = sin((rotation + 90) * DEG2RAD);
+	   Projectile pro = {tmp, rotation, sx, sy};
+	   worldProjectiles.push_back(pro);
    }
 
    // getting hit by enemy
    for(int i = 1; i < worldEntity.size(); i++)
-       if(CheckCollisionRecs({player.sprite.pos.x, player.sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE})) 
-           player.alive = false;
+   {
+	   if(CheckCollisionRecs({player.sprite.pos.x, player.sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, {worldEntity[i].sprite.pos.x, worldEntity[i].sprite.pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && TimerDone(hitTimer)) 
+		{
+			StartTimer(&hitTimer, 1.00);
+			player.health -= 20;
+			std::cout << player.health << std::endl;
+			if(player.health <= 0)
+				player.alive = false;
+		}
+   }
+}
+
+
+
+// create mobs (inc over time)
+void spawnMobs(int& fc, Camera2D camera)
+{
+	// incmenting the spawn rate every min
+	if((TimerDone(spawnTimer)))
+	{ 
+		std::cout << std::ceil(GetTime()) << std::endl;
+		fc = 0;
+		SPAWN -= 3;
+		StartTimer(&spawnTimer, 60);
+	}
+	
+	if(fc % SPAWN == 0)
+	{
+		fc = 0;
+		int pos = (rand() % 4) + 1;
+		switch (pos)
+		{
+			case 1:
+				worldEntity.push_back({"ghastly_eye", (Vector2){camera.target.x - camera.offset.x, static_cast<float>(GetRandomValue(camera.target.y - camera.offset.y,camera.target.y + camera.offset.y))}, 0, 100, 1, true});
+				break;
+			case 2: 
+				worldEntity.push_back({"ghastly_eye", (Vector2){static_cast<float>(GetRandomValue(camera.target.x - camera.offset.x,camera.target.x + camera.offset.x)), camera.target.y - camera.offset.y}, 0, 100, 1, true});
+				break;
+			case 3:
+				worldEntity.push_back({"ghastly_eye", (Vector2){camera.target.x + camera.offset.x, static_cast<float>(GetRandomValue(camera.target.y - camera.offset.y,camera.target.y + camera.offset.y))}, 0, 100, 1, true});
+				break;
+			default:
+				worldEntity.push_back({"ghastly_eye", (Vector2){static_cast<float>(GetRandomValue(camera.target.x - camera.offset.x,camera.target.x + camera.offset.x)), camera.target.y + camera.offset.y}, 0, 100, 1, true});
+				break; 
+			}
+	}
 }
 
 // returns the spawn point of the player in the ith level
@@ -300,62 +395,60 @@ Vector2 getSpawn(int& cl)
 
 int main()
 {
-  SetTraceLogLevel(LOG_ERROR);
-  InitWindow(900,900, "animation");
-  SetTargetFPS(60);
-  int cl = 1;
-  loadWorld(world, cl);
-  loadTextures();
-  Entity player = {{"grave_revanent", getSpawn(cl), 0}, 100, 5, true};
-  worldEntity.push_back(player);
-  // init camera
-  Camera2D camera = {0};
-  camera.target = player.sprite.pos;
-  camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
-  camera.zoom = 1.5f;
+	SetTraceLogLevel(LOG_ERROR);
+  	InitWindow(900,900, "animation");
+	SetTargetFPS(60);
+	int cl = 1;
+	loadWorld(world, cl);
+	loadTextures();
+	Entity player = {{"grave_revanent", getSpawn(cl), 0}, 100, 5, true};
+	worldEntity.push_back(player);
+	// init camera
+	StartTimer(&spawnTimer, 60.00);
+	StartTimer(&hitTimer, 1.00);
+	Camera2D camera = {0};
+	camera.target = player.sprite.pos;
+	camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
+	camera.zoom = 1.5f;
+  	int fc = 0;
 
   while (!WindowShouldClose())
   {
-      // update camera target
-      camera.target = worldEntity[0].sprite.pos;
-      camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
-
-      // mouse position must be translated to camera target
-      mouse = GetScreenToWorld2D(GetMousePosition(), camera);
-      BeginDrawing();
-          ClearBackground(BLACK);
-          // everything in 2D mode will move according to camera
-          BeginMode2D(camera);
-              if(worldEntity[0].alive)
-              {
-                  drawWorld(world, TILES, ITEMS, 0);
-                  updatePlayer(worldEntity[0]);
-                  updateMobs();
-                  if(IsKeyDown(KEY_E))
-                      worldEntity.push_back({{"dismembered_crawler", {getSpawn(cl).x - 60, getSpawn(cl).y + 150}, 0}, 100, 1});
-                  animateSprites();
-                  animateProjectiles(camera);
-              }
-              else
-              {
-                  ClearBackground(GRAY);
-                  DrawText("YOU DIED, TRY AGAIN? (PRESS ENTER)", player.sprite.pos.x - MeasureText("YOU DIED, TRY AGAIN? (PRESS ENTER)", 20) / 2.0f, player.sprite.pos.y, 20, RED);
-                  if(IsKeyPressed(KEY_ENTER))
-                  {
-                   worldEntity[0].alive = true;
-                   worldEntity.clear();
-                   worldEntity.push_back(player);
-                  }
-              }
-          EndMode2D();
-          // everything outside of 2D mode is static
-          DrawFPS(0, 0);
-      EndDrawing();
+	  // update camera target
+	  camera.target = worldEntity[0].sprite.pos;
+	  camera.offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
+	  // mouse position must be translated to camera target
+	  mouse = GetScreenToWorld2D(GetMousePosition(), camera);
+	  BeginDrawing();
+		  ClearBackground(BLACK);
+		  // everything in 2D mode will move according to camera
+		  BeginMode2D(camera);
+			  if(worldEntity[0].alive)
+			  {
+				spawnMobs(++fc, camera);
+				  drawWorld(world, TILES, ITEMS, 0);
+				  updatePlayer(worldEntity[0]);
+				  updateMobs();
+				  animateSprites();
+				  animateProjectiles(camera);
+			  }
+			  else
+			  {
+				  ClearBackground(GRAY);
+				  DrawText("YOU DIED, TRY AGAIN? (PRESS ENTER)", player.sprite.pos.x - MeasureText("YOU DIED, TRY AGAIN? (PRESS ENTER)", 20) / 2.0f, player.sprite.pos.y, 20, RED);
+				  if(IsKeyPressed(KEY_ENTER))
+				  {
+				   worldEntity[0].alive = true;
+				   worldEntity.clear();
+				   worldEntity.push_back(player);
+				  }
+			  }
+		  EndMode2D();
+		  // everything outside of 2D mode is static
+		  DrawFPS(0, 0);
+	  EndDrawing();
   }
   unloadTextures();
   CloseWindow();
   return 0;
 }
-
-
-
