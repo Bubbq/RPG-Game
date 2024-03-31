@@ -50,9 +50,10 @@ std::vector<Tile> doors;
 std::vector<Tile> buffs;
 std::vector<Tile> interactables;
 
-void saveLayer(std::vector<Tile>& layer)
+void saveLayer(std::vector<Tile>& layer, std::string filePath)
 {
-	std::ofstream outFile("level.txt", std::ios::app);
+
+	std::ofstream outFile(filePath, std::ios::app);
 	if(!outFile)
 	{
 		std::cerr << "ERROR SAVING LEVEL \n";
@@ -68,15 +69,14 @@ void saveLayer(std::vector<Tile>& layer)
 				<< layer[i].fp << ","
 				<< layer[i].tt << std::endl;
 
-		UnloadTexture(layer[i].tx);
 	}
 
 	outFile.close();
 }
 
-void loadLayers()
+void loadLayers(std::string filePath)
 {
-    std::ifstream inFile("level.txt");
+    std::ifstream inFile(filePath);
 	if(!inFile)
 	{
 		std::cerr << "NO LAYERS TO SAVE \n";
@@ -105,13 +105,6 @@ void loadLayers()
 		data.push_back(record);
 	}
 
-	for (auto i : data) {
-		for (auto j : i) {
-			std::cout << j << ", ";
-		}
-		std::cout << '\n';
-	}
-
 	inFile.close();
 
 	// iterate through every line in txt file
@@ -128,7 +121,7 @@ void loadLayers()
 		// add element to appropriate layer
 		switch (tt)
 		{
-			case WALL: walls.push_back(loadedTile); std::cout<< "ADDED WALL \n"; break;
+			case WALL: walls.push_back(loadedTile); break;
 			case FLOOR: floors.push_back(loadedTile); break;
 			case DOOR: doors.push_back(loadedTile); break;
 			case BUFF: buffs.push_back(loadedTile); break;
@@ -141,10 +134,9 @@ void loadLayers()
 
 void init()
 {
-    // SetTraceLogLevel(LOG_ERROR);
+    SetTraceLogLevel(LOG_ERROR);
     SetTargetFPS(60);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "EDITOR");
-	loadLayers();
 }
 
 void deinit(Texture2D texture, std::vector<Tile>& tile_dict)
@@ -153,13 +145,7 @@ void deinit(Texture2D texture, std::vector<Tile>& tile_dict)
 	{
 		UnloadTexture(tile_dict[i].tx);
 	}
-	
-	system("rm level.txt");
-	saveLayer(walls);
-	saveLayer(floors);
-	saveLayer(doors);
-	saveLayer(buffs);
-	saveLayer(interactables);
+
     UnloadTexture(texture);
     CloseWindow();
 }
@@ -312,7 +298,10 @@ int main()
 	Rectangle side_panel = {TILE_SIZE, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 8.0f, SCREEN_TILE_SIZE * 28.0f};
 	Rectangle layer_panel = {GetScreenWidth() - TILE_SIZE - SCREEN_TILE_SIZE * 5.0f, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 5.0f, SCREEN_TILE_SIZE * 7.0f};
 	// current layer user selects
-	int cl = 0;
+	int cl = 5;
+	// flag to show input box to name txt file
+	bool showTextInputBox = false;
+	char textInput [256];
 	std::vector<Tile> tile_dict;
     std::string userFilePath;
     Texture2D texture = { 0 };
@@ -343,6 +332,13 @@ int main()
 				readPNG(texture, tile_dict, userFilePath);
             }
 
+			// loading previously saved file
+			if(IsFileExtension(fileDialogState.fileNameText, ".txt"))
+			{
+				loadLayers(fileDialogState.fileNameText);
+				std::cout << fileDialogState.fileNameText << std::endl;
+			}
+
             fileDialogState.SelectFilePressed = false;
         }
 
@@ -358,7 +354,7 @@ int main()
             // only focus on the window choosing your file
             if (fileDialogState.windowActive) GuiLock();
 
-            if (GuiButton((Rectangle){ GetScreenWidth() - float(SCREEN_TILE_SIZE / 2.0f), 0, float(SCREEN_TILE_SIZE / 2.0f), float(SCREEN_TILE_SIZE / 2.0f) }, GuiIconText(ICON_FILE_OPEN, ""))) fileDialogState.windowActive = true;
+            if (GuiButton((Rectangle){ float(SCREEN_TILE_SIZE  * 4), 0, float(SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE) }, GuiIconText(ICON_FILE_OPEN, "Load file/tetxure"))) fileDialogState.windowActive = true;
 
             // able to click other buttons once you select the desired image
             GuiUnlock();
@@ -368,7 +364,40 @@ int main()
 
 			GuiPanel(layer_panel, "LAYERS");
 			// showing layers
-            GuiToggleGroup((Rectangle){ GetScreenWidth() - SCREEN_TILE_SIZE * 5.0f, float(SCREEN_TILE_SIZE + PANEL_HEIGHT + TILE_SIZE), SCREEN_TILE_SIZE * 4.0f, 24}, "WALLS \n FLOORS \n DOORS \n BUFFS \n INTERACTABLES \n PLAYER VIEW", &cl);
+			GuiToggleGroup((Rectangle){ GetScreenWidth() - SCREEN_TILE_SIZE * 5.0f, float(SCREEN_TILE_SIZE + PANEL_HEIGHT + TILE_SIZE), SCREEN_TILE_SIZE * 4.0f, 24}, "WALLS \n FLOORS \n DOORS \n BUFFS \n INTERACTABLES \n PLAYER VIEW", &cl);
+            
+			if (GuiButton((Rectangle){ TILE_SIZE,0, float(SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE) }, GuiIconText(ICON_FILE_SAVE, "Save File"))) showTextInputBox = true;
+
+			// enterting file name to save new world
+			if (showTextInputBox)
+            {
+                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(RAYWHITE, 0.8f));
+                int result = GuiTextInputBox((Rectangle){ (float)GetScreenWidth()/2 - 120, (float)GetScreenHeight()/2 - 60, 240, 140 }, GuiIconText(ICON_FILE_SAVE, "Save file as..."), "Introduce output file name:", "Ok;Cancel", textInput, 255, NULL);
+
+				// save world to chosen filename
+                if (result == 1)
+                {
+                    if(textInput[0] != '\0')
+					{
+						system(("touch " + std::string(textInput) + ".txt").c_str());
+						
+						saveLayer(walls, std::string(textInput) + ".txt");
+						saveLayer(floors, std::string(textInput) + ".txt");
+						saveLayer(doors, std::string(textInput) + ".txt");
+						saveLayer(buffs, std::string(textInput) + ".txt");
+						saveLayer(interactables, std::string(textInput) + ".txt");
+
+						cl = 5;
+					}
+                }
+				
+				// reset flag upon saving and premature exit
+				if ((result == 0) || (result == 1) || (result == 2))
+				{
+					showTextInputBox = false;
+				}
+            }
+
         EndDrawing();
     }
 
