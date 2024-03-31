@@ -1,5 +1,5 @@
 all:
-	g++ animation.cpp tile_generation.cpp -o run -lraylib
+	g++ better_editor.cpp -o run -lraylib -lm
 edit:
 	g++ editor.cpp tile_generation.cpp -o run -lraylib
 clean:
