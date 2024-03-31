@@ -1,0 +1,2 @@
+80 48 left_door 1 416 192
+96 48 right_door 1 448 192
