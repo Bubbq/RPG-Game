@@ -1,9 +1,11 @@
 #include "raylib.h"
-#include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <raymath.h>
+#include <sstream>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
@@ -48,96 +50,101 @@ std::vector<Tile> doors;
 std::vector<Tile> buffs;
 std::vector<Tile> interactables;
 
-std::string ReplaceString(std::string subject, const std::string& search, const std::string& replace)
+void saveLayer(std::vector<Tile>& layer)
 {
- 
-  size_t pos = 0;
- 
-  while ((pos = subject.find(search, pos)) != std::string::npos)
-  {
-       subject.replace(pos, search.length(), replace);
-       pos += replace.length();
-  }
- 
-  return subject;
+	std::ofstream outFile("level.txt", std::ios::app);
+	if(!outFile)
+	{
+		std::cerr << "ERROR SAVING LEVEL \n";
+		return;
+	}
+
+	for(int i = 0; i < layer.size(); i++)
+	{
+		outFile << layer[i].src.x << ","
+		 		<< layer[i].src.y << ","
+				<< layer[i].sp.x << ","
+				<< layer[i].sp.y << ","
+				<< layer[i].fp << ","
+				<< layer[i].tt << std::endl;
+
+		UnloadTexture(layer[i].tx);
+	}
+
+	outFile.close();
 }
 
-std::string linuxFormat(std::string input)
+void loadLayers()
 {
-   // change special characters
-   input = ReplaceString(input, " ", "\\ ");
-   input = ReplaceString(input, "(", "\\(");
-   input = ReplaceString(input, ")", "\\)");
-   input = ReplaceString(input, "&", "\\&");
-   input = ReplaceString(input, "'", "\\'");
-   input = ReplaceString(input, "`", "\\`");
-   input = ReplaceString(input, "’", "\\’");
-   input = ReplaceString(input, "\"", "\\\"");
+    std::ifstream inFile("level.txt");
+	if(!inFile)
+	{
+		std::cerr << "NO LAYERS TO SAVE \n";
+		return;
+	} else std::cout << "Found level\n";
 
-   return input;
+	// containing the records of every peice of data in txt file
+	std::vector<std::vector<std::string>> data;
+
+	while(inFile)
+	{
+		std::string line;
+		if(!std::getline(inFile, line)) break;
+
+		std::stringstream ss(line);
+		// splits each element in the ith line into a vector of values
+		std::vector<std::string> record;
+
+		while(ss)
+		{
+			std::string s;
+			if(!std::getline(ss, s, ',')) break;
+
+			record.push_back(s);
+		}
+		data.push_back(record);
+	}
+
+	for (auto i : data) {
+		for (auto j : i) {
+			std::cout << j << ", ";
+		}
+		std::cout << '\n';
+	}
+
+	inFile.close();
+
+	// iterate through every line in txt file
+	for(const auto& record : data)
+	{
+		Vector2 src = {std::stof(record[0]), std::stof(record[1])};
+		Vector2 sp = {std::stof(record[2]), std::stof(record[3])};
+		std::string fp = record[4];
+		Element tt = Element(std::stoi(record[5]));
+		Texture2D tx = LoadTexture(fp.c_str());
+
+		Tile loadedTile = {src, sp, tx, fp, tt};
+		std::cout << src.x << src.y << sp.x << sp.y << '\n';
+		// add element to appropriate layer
+		switch (tt)
+		{
+			case WALL: walls.push_back(loadedTile); std::cout<< "ADDED WALL \n"; break;
+			case FLOOR: floors.push_back(loadedTile); break;
+			case DOOR: doors.push_back(loadedTile); break;
+			case BUFF: buffs.push_back(loadedTile); break;
+			case INTERACTABLE: interactables.push_back(loadedTile); break;
+			default:
+				break;
+		}
+	}
 }
-
-// void saveLevel()
-// {
-// 	std::ofstream outFile;
-// 	outFile.open("level.txt");
-// 	if(!outFile)
-// 	{
-// 		std::cerr << "ERROR SAVING LEVEL \n";
-// 		return;
-// 	}
-
-// 	for(int i = 0; i < worldTile.size(); i++)
-// 	{
-// 		outFile << worldTile[i].src.x << ","
-// 		 		<< worldTile[i].src.y << ","
-// 				<< worldTile[i].sp.x << ","
-// 				<< worldTile[i].sp.y << ","
-// 				<< linuxFormat(worldTile[i].fp) << ","
-// 				<< worldTile[i].tt << std::endl;
-
-// 		UnloadTexture(worldTile[i].tx);
-// 	}
-
-// 	outFile.close();
-// }
-
-// void loadTiles()
-// {
-//     std::ifstream inFile;
-//     inFile.open("level.txt");
-//     if (!inFile)
-//     {
-//         std::cerr << "NO FILE SAVED \n";
-//         return;
-//     }
-
-//     Vector2 src = { 0 };
-//     Vector2 sp = { 0 };
-//     Texture2D tx = { 0 };
-//     std::string fp = "";
-//     int tt = 0;
-
-//     while (inFile >> src.x >> src.y >> sp.x >> sp.y >> fp >> tt)
-//     {
-//         Image img = LoadImage(fp.c_str());
-//         if (IsImageReady(img))
-//         {
-//             tx = LoadTextureFromImage(img);
-//             worldTile.push_back({src, sp, tx, fp, (Element)tt});
-//         }
-//     }
-
-//     std::cout << worldTile.size() << std::endl;
-//     inFile.close();
-// }
 
 void init()
 {
-    SetTraceLogLevel(LOG_ERROR);
+    // SetTraceLogLevel(LOG_ERROR);
     SetTargetFPS(60);
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "EDITOR");
-	// loadTiles();
+	loadLayers();
 }
 
 void deinit(Texture2D texture, std::vector<Tile>& tile_dict)
@@ -147,7 +154,12 @@ void deinit(Texture2D texture, std::vector<Tile>& tile_dict)
 		UnloadTexture(tile_dict[i].tx);
 	}
 	
-	// saveLevel();
+	system("rm level.txt");
+	saveLayer(walls);
+	saveLayer(floors);
+	saveLayer(doors);
+	saveLayer(buffs);
+	saveLayer(interactables);
     UnloadTexture(texture);
     CloseWindow();
 }
@@ -238,10 +250,8 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 		case BUFF: tmp = buffs; break;
 		case INTERACTABLE: tmp = interactables; break;
 
-		// in payer view, draw all tiles only
+		// in payer view, draw all tiles only + read only
 		default:
-			for(int i = 0; i < walls.size(); i++)
-				DrawTexturePro(walls[i].tx, {walls[i].src.x, walls[i].src.y, TILE_SIZE, TILE_SIZE}, {walls[i].sp.x, walls[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			for(int i = 0; i < floors.size(); i++)
 				DrawTexturePro(floors[i].tx, {floors[i].src.x, floors[i].src.y, TILE_SIZE, TILE_SIZE}, {floors[i].sp.x, floors[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			for(int i = 0; i < doors.size(); i++)
@@ -250,6 +260,8 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 				DrawTexturePro(buffs[i].tx, {buffs[i].src.x, buffs[i].src.y, TILE_SIZE, TILE_SIZE}, {buffs[i].sp.x, buffs[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			for(int i = 0; i < interactables.size(); i++)
 				DrawTexturePro(interactables[i].tx, {interactables[i].src.x, interactables[i].src.y, TILE_SIZE, TILE_SIZE}, {interactables[i].sp.x, interactables[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
+			for(int i = 0; i < walls.size(); i++)
+				DrawTexturePro(walls[i].tx, {walls[i].src.x, walls[i].src.y, TILE_SIZE, TILE_SIZE}, {walls[i].sp.x, walls[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			break;
 	}
 
@@ -290,7 +302,6 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 		default:
 			break;
 	}
-
 }
 
 int main()
