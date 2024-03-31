@@ -12,12 +12,13 @@
 
 const int SCREEN_WIDTH = 992;
 const int SCREEN_HEIGHT = 992;
-const int PANEL_HEIGHT = 20;
+const int PANEL_HEIGHT = 24;
 
 const int TILE_SIZE = 16;
 const float SCALE = 2.0f;
 const int SCREEN_TILE_SIZE = TILE_SIZE * SCALE;
 const int TILES_PER_ROW = SCREEN_WIDTH / SCREEN_TILE_SIZE;
+int DISPLAY_TILE_SIZE = SCREEN_TILE_SIZE;
 
 struct Tile
 {
@@ -71,24 +72,34 @@ void readPNG(Texture2D texture, std::vector<Tile>& tile_dict, std::string fp)
 // showing availible tiles that user can append the map to
 void chooseTiles(std::vector<Tile> tile_dict, Rectangle side_panel, Tile& currTile)
 {
+	// the last tile before overflowing the side panel, TODO FIX HARDCODED Y VALUE FOR LT.Y
+	Vector2 lt = {side_panel.x + side_panel.width - DISPLAY_TILE_SIZE,888};
 	Vector2 cp1 = {side_panel.x,float(side_panel.y + PANEL_HEIGHT)};
+
 	for(int i = 0; i < tile_dict.size(); i++)
 	{
 		tile_dict[i].sp = cp1;
-		DrawTexturePro(tile_dict[i].tx, {tile_dict[i].src.x, tile_dict[i].src.y, TILE_SIZE,TILE_SIZE}, {cp1.x, cp1.y, SCREEN_TILE_SIZE * 1.0f, SCREEN_TILE_SIZE * 1.0f}, {0,0}, 0, WHITE);
-		cp1.x += SCREEN_TILE_SIZE;
+
+		// shrink to fit panel
+		if(tile_dict[i].sp.x == lt.x && tile_dict[i].sp.y == lt.y)
+		{
+			DISPLAY_TILE_SIZE /= 2;
+		}
+		
+		DrawTexturePro(tile_dict[i].tx, {tile_dict[i].src.x, tile_dict[i].src.y, TILE_SIZE,TILE_SIZE}, {cp1.x, cp1.y, float(DISPLAY_TILE_SIZE), float(DISPLAY_TILE_SIZE)}, {0,0}, 0, WHITE);
+		cp1.x += DISPLAY_TILE_SIZE;
 		
 		// moving to new row
-		if((i + 1) % int(side_panel.width / SCREEN_TILE_SIZE) == 0 && i != 0)
+		if((i + 1) % int(side_panel.width / DISPLAY_TILE_SIZE) == 0 && i != 0)
 		{
 			cp1.x = side_panel.x;
-			cp1.y += SCREEN_TILE_SIZE;
+			cp1.y += DISPLAY_TILE_SIZE;
 		}
 
-		if(CheckCollisionPointRec(GetMousePosition(), {tile_dict[i].sp.x, tile_dict[i].sp.y, SCREEN_TILE_SIZE * 1.0f, SCREEN_TILE_SIZE * 1.0f}))
+		if(CheckCollisionPointRec(GetMousePosition(), {tile_dict[i].sp.x, tile_dict[i].sp.y, float(DISPLAY_TILE_SIZE), float(DISPLAY_TILE_SIZE)}))
 		{
 			// higlight tile that user is hovering over
-			DrawRectangleLines(tile_dict[i].sp.x, tile_dict[i].sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, BLUE);
+			DrawRectangleLines(tile_dict[i].sp.x, tile_dict[i].sp.y, DISPLAY_TILE_SIZE, DISPLAY_TILE_SIZE, BLUE);
 			// update current tile
 			if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
 			{
@@ -100,7 +111,7 @@ void chooseTiles(std::vector<Tile> tile_dict, Rectangle side_panel, Tile& currTi
 	// highlight the current tile a user has selected
 	if(currTile.tx.id != 0)
 	{
-		DrawRectangleLines(currTile.sp.x, currTile.sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, LIGHTGRAY);
+		DrawRectangleLines(currTile.sp.x, currTile.sp.y, DISPLAY_TILE_SIZE,DISPLAY_TILE_SIZE, LIGHTGRAY);
 	}
 }
 
@@ -109,7 +120,7 @@ int main()
     init();
     
     GuiWindowFileDialogState fileDialogState = InitGuiWindowFileDialog(GetWorkingDirectory());
-	Rectangle side_panel = {TILE_SIZE, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 8.0f, GetScreenHeight() * 0.90f};
+	Rectangle side_panel = {TILE_SIZE, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 8.0f, SCREEN_TILE_SIZE * 28.0f};
 	std::vector<Tile> tile_dict;
     std::string userFilePath;
     Texture2D texture = { 0 };
@@ -122,9 +133,8 @@ int main()
         {
             if (IsFileExtension(fileDialogState.fileNameText, ".png"))
             {
-				tile_dict.clear();
                 userFilePath = TextFormat("%s" PATH_SEPERATOR "%s", fileDialogState.dirPathText, fileDialogState.fileNameText);
-                UnloadTexture(texture);
+                // UnloadTexture(texture);
                 texture = LoadTexture(userFilePath.c_str());
 				readPNG(texture, tile_dict, userFilePath);
             }
@@ -133,7 +143,6 @@ int main()
         }
 
         BeginDrawing();
-
             ClearBackground(WHITE);
 			// drawing tiles to the side
 			GuiPanel(side_panel, "AVAILIBLE TILES");
@@ -150,6 +159,7 @@ int main()
 			// updates the file dialouge window
             GuiWindowFileDialog(&fileDialogState);
 
+			// DrawRectangle(side_panel.x + side_panel.width - DISPLAY_TILE_SIZE,side_panel.height, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, RED);
         EndDrawing();
     }
 
