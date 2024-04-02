@@ -81,7 +81,7 @@ void loadLayers(std::string filePath)
 	{
 		std::cerr << "NO LAYERS TO SAVE \n";
 		return;
-	} else std::cout << "Found level\n";
+	}
 
 	// containing the records of every peice of data in txt file
 	std::vector<std::vector<std::string>> data;
@@ -117,7 +117,6 @@ void loadLayers(std::string filePath)
 		Texture2D tx = LoadTexture(fp.c_str());
 
 		Tile loadedTile = {src, sp, tx, fp, tt};
-		std::cout << src.x << src.y << sp.x << sp.y << '\n';
 		// add element to appropriate layer
 		switch (tt)
 		{
@@ -175,7 +174,7 @@ void readPNG(Texture2D texture, std::vector<Tile>& tile_dict, std::string fp)
 }
 
 // showing availible tiles that user can append the map to
-void chooseTiles(std::vector<Tile> tile_dict, Rectangle side_panel, Tile& currTile)
+void chooseTiles(std::vector<Tile>& tile_dict, Rectangle side_panel, Tile& currTile)
 {
 	// the last tile before overflowing the side panel, TODO FIX HARDCODED Y VALUE
 	Vector2 lt = {side_panel.x + side_panel.width - DISPLAY_TILE_SIZE,888};
@@ -214,6 +213,12 @@ void chooseTiles(std::vector<Tile> tile_dict, Rectangle side_panel, Tile& currTi
 		}
 	}
 
+	// reset tiles to choose from
+	if(IsKeyPressed(KEY_E))
+	{
+		tile_dict.clear();
+	}
+
 	// highlight the current tile a user has selected
 	if(currTile.tx.id != 0)
 	{
@@ -221,9 +226,24 @@ void chooseTiles(std::vector<Tile> tile_dict, Rectangle side_panel, Tile& currTi
 	}
 }
 
+void drawLayer(std::vector<Tile> layer, Color color, const char * dsc, bool showDsc)
+{
+	for(int i = 0; i < layer.size(); i++)
+	{
+		if(!layer[i].fp.empty())
+		{
+			DrawTexturePro(layer[i].tx, {layer[i].src.x, layer[i].src.y, TILE_SIZE, TILE_SIZE}, {layer[i].sp.x, layer[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
+			if(!showDsc)
+			{
+				DrawText(dsc, layer[i].sp.x + SCREEN_TILE_SIZE - MeasureText(dsc, 5), layer[i].sp.y + TILE_SIZE, 5, color);
+			}
+		}
+	}
+}
+
 void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 {
-	// get nearest coord divisible by screen tile size
+	// snap mouse position to nearest tile by making it divisble by the screen tile size
 	int mpx = (((int)GetMousePosition().x >> (int)log2(SCREEN_TILE_SIZE)) << (int)log2(SCREEN_TILE_SIZE));
     int mpy = (((int)GetMousePosition().y >> (int)log2(SCREEN_TILE_SIZE)) << (int)log2(SCREEN_TILE_SIZE));
 	
@@ -235,45 +255,31 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 		case DOOR: tmp = doors; break;
 		case BUFF: tmp = buffs; break;
 		case INTERACTABLE: tmp = interactables; break;
-
-		// in payer view, draw all tiles only + read only
 		default:
-			for(int i = 0; i < floors.size(); i++)
-				DrawTexturePro(floors[i].tx, {floors[i].src.x, floors[i].src.y, TILE_SIZE, TILE_SIZE}, {floors[i].sp.x, floors[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
-			for(int i = 0; i < doors.size(); i++)
-				DrawTexturePro(doors[i].tx, {doors[i].src.x, doors[i].src.y, TILE_SIZE, TILE_SIZE}, {doors[i].sp.x, doors[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
-			for(int i = 0; i < buffs.size(); i++)
-				DrawTexturePro(buffs[i].tx, {buffs[i].src.x, buffs[i].src.y, TILE_SIZE, TILE_SIZE}, {buffs[i].sp.x, buffs[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
-			for(int i = 0; i < interactables.size(); i++)
-				DrawTexturePro(interactables[i].tx, {interactables[i].src.x, interactables[i].src.y, TILE_SIZE, TILE_SIZE}, {interactables[i].sp.x, interactables[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
-			for(int i = 0; i < walls.size(); i++)
-				DrawTexturePro(walls[i].tx, {walls[i].src.x, walls[i].src.y, TILE_SIZE, TILE_SIZE}, {walls[i].sp.x, walls[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			break;
 	}
-
+	
+	// tile creation
 	if(CheckCollisionPointRec(GetMousePosition(), worldArea))
 	{
 		DrawRectangleLines(mpx, mpy, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, BLUE);
-		// add tiles
+		
 		if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !currTile.fp.empty() && ce != UNDF)
 		{
 			Tile newTile = {currTile.src, {float(mpx), float(mpy)}, currTile.tx, currTile.fp, (Element)ce};
 			tmp.push_back(newTile);
 		}
 	}
-
+	
+	// tile erasure
 	for(int i = 0; i < tmp.size(); i++)
 	{
 		if(!tmp[i].fp.empty())
 		{
-			// tile erasure
 			if(CheckCollisionPointRec(GetMousePosition(), {tmp[i].sp.x, tmp[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}) && IsMouseButtonDown(MOUSE_RIGHT_BUTTON))
 			{
 				tmp.erase(tmp.begin() + i);
 			}
-			
-			// draw tile to that specific layer
-			DrawTexturePro(tmp[i].tx, {tmp[i].src.x, tmp[i].src.y, TILE_SIZE, TILE_SIZE}, {tmp[i].sp.x, tmp[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 		}
 	}
 
@@ -288,6 +294,13 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 		default:
 			break;
 	}
+	
+	// draw each layer, dont show tile descriptor if in "player mode"
+	drawLayer(floors, RED, "F", (ce == UNDF));
+	drawLayer(doors, ORANGE, "D", (ce == UNDF));
+	drawLayer(buffs, YELLOW, "B", (ce == UNDF));
+	drawLayer(interactables,GREEN, "I", (ce == UNDF));
+	drawLayer(walls, BLUE, "W", (ce == UNDF));
 }
 
 int main()
@@ -297,6 +310,7 @@ int main()
     GuiWindowFileDialogState fileDialogState = InitGuiWindowFileDialog(GetWorkingDirectory());
 	Rectangle side_panel = {TILE_SIZE, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 8.0f, SCREEN_TILE_SIZE * 28.0f};
 	Rectangle layer_panel = {GetScreenWidth() - TILE_SIZE - SCREEN_TILE_SIZE * 5.0f, float(SCREEN_TILE_SIZE), SCREEN_TILE_SIZE * 5.0f, SCREEN_TILE_SIZE * 7.0f};
+	Rectangle edit_map_panel = {GetScreenWidth() - TILE_SIZE - SCREEN_TILE_SIZE * 5.0f, layer_panel.y + layer_panel.height + SCREEN_TILE_SIZE, SCREEN_TILE_SIZE * 5.0f, SCREEN_TILE_SIZE * 6.0f};
 	// current layer user selects
 	int cl = 5;
 	// flag to show input box to name txt file
@@ -336,7 +350,6 @@ int main()
 			if(IsFileExtension(fileDialogState.fileNameText, ".txt"))
 			{
 				loadLayers(fileDialogState.fileNameText);
-				std::cout << fileDialogState.fileNameText << std::endl;
 			}
 
             fileDialogState.SelectFilePressed = false;
@@ -354,7 +367,9 @@ int main()
             // only focus on the window choosing your file
             if (fileDialogState.windowActive) GuiLock();
 
-            if (GuiButton((Rectangle){ float(SCREEN_TILE_SIZE  * 4), 0, float(SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE) }, GuiIconText(ICON_FILE_OPEN, "Load file/tetxure"))) fileDialogState.windowActive = true;
+			// saving worlds and loading textures
+			if (GuiButton((Rectangle){ TILE_SIZE, 8, float(SCREEN_TILE_SIZE * 3), float(TILE_SIZE) }, GuiIconText(ICON_FILE_SAVE, "SAVE WORLD"))) showTextInputBox = true;
+            if (GuiButton((Rectangle){ float(SCREEN_TILE_SIZE  * 4), 8, float(SCREEN_TILE_SIZE * 5), float(TILE_SIZE) }, GuiIconText(ICON_FILE_OPEN, "LOAD WORLD/TEXTURE"))) fileDialogState.windowActive = true;
 
             // able to click other buttons once you select the desired image
             GuiUnlock();
@@ -362,11 +377,33 @@ int main()
 			// updates the file dialouge window
             GuiWindowFileDialog(&fileDialogState);
 
-			GuiPanel(layer_panel, "LAYERS");
 			// showing layers
+			GuiPanel(layer_panel, "LAYER TO EDIT");
 			GuiToggleGroup((Rectangle){ GetScreenWidth() - SCREEN_TILE_SIZE * 5.0f, float(SCREEN_TILE_SIZE + PANEL_HEIGHT + TILE_SIZE), SCREEN_TILE_SIZE * 4.0f, 24}, "WALLS \n FLOORS \n DOORS \n BUFFS \n INTERACTABLES \n PLAYER VIEW", &cl);
             
-			if (GuiButton((Rectangle){ TILE_SIZE,0, float(SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE) }, GuiIconText(ICON_FILE_SAVE, "Save File"))) showTextInputBox = true;
+			// editing map size
+			GuiPanel(edit_map_panel, "MAP SIZE");
+			DrawText("Width", edit_map_panel.x + ((edit_map_panel.width / 2) - MeasureText("Width", 15) / 2), edit_map_panel.y + PANEL_HEIGHT + TILE_SIZE, 15, GRAY);
+			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE, edit_map_panel.y + PANEL_HEIGHT + SCREEN_TILE_SIZE, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "+"))
+			{
+				worldArea.width += SCREEN_TILE_SIZE;
+			}
+
+			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE * 3, edit_map_panel.y + PANEL_HEIGHT + SCREEN_TILE_SIZE, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "-"))
+			{
+				worldArea.width -= SCREEN_TILE_SIZE;
+			}
+
+			DrawText("Height", edit_map_panel.x + ((edit_map_panel.width / 2) - MeasureText("Height", 15) / 2), edit_map_panel.y + PANEL_HEIGHT + TILE_SIZE + SCREEN_TILE_SIZE * 2, 15, GRAY);
+			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE, edit_map_panel.y + PANEL_HEIGHT + (SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "+"))
+			{
+				worldArea.height += SCREEN_TILE_SIZE;
+			}
+
+			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE * 3, edit_map_panel.y + PANEL_HEIGHT + (SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "-"))
+			{
+				worldArea.height -= SCREEN_TILE_SIZE;
+			}
 
 			// enterting file name to save new world
 			if (showTextInputBox)
