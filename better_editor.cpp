@@ -14,7 +14,7 @@
 #define GUI_WINDOW_FILE_DIALOG_IMPLEMENTATION
 #include "gui_window_file_dialog.h"
 
-const int SCREEN_WIDTH = 1120;
+const int SCREEN_WIDTH = 1920;
 const int SCREEN_HEIGHT = 992;
 const int PANEL_HEIGHT = 24;
 
@@ -52,7 +52,6 @@ std::vector<Tile> interactables;
 
 void saveLayer(std::vector<Tile>& layer, std::string filePath)
 {
-
 	std::ofstream outFile(filePath, std::ios::app);
 	if(!outFile)
 	{
@@ -68,13 +67,12 @@ void saveLayer(std::vector<Tile>& layer, std::string filePath)
 				<< layer[i].sp.y << ","
 				<< layer[i].fp << ","
 				<< layer[i].tt << std::endl;
-
 	}
 
 	outFile.close();
 }
 
-void loadLayers(std::string filePath)
+void loadLayers(std::string filePath, Rectangle worldArea)
 {
     std::ifstream inFile(filePath);
 	if(!inFile)
@@ -113,6 +111,7 @@ void loadLayers(std::string filePath)
 		Vector2 src = {std::stof(record[0]), std::stof(record[1])};
 		Vector2 sp = {std::stof(record[2]), std::stof(record[3])};
 		std::string fp = record[4];
+
 		Element tt = Element(std::stoi(record[5]));
 		Texture2D tx = LoadTexture(fp.c_str());
 
@@ -226,11 +225,11 @@ void chooseTiles(std::vector<Tile>& tile_dict, Rectangle side_panel, Tile& currT
 	}
 }
 
-void drawLayer(std::vector<Tile> layer, Color color, const char * dsc, bool showDsc)
+void drawLayer(std::vector<Tile> layer, Color color, Rectangle worldArea, const char * dsc, bool showDsc)
 {
 	for(int i = 0; i < layer.size(); i++)
 	{
-		if(!layer[i].fp.empty())
+		if(!layer[i].fp.empty() && layer[i].sp.x < worldArea.x + worldArea.width && layer[i].sp.y < worldArea.y + worldArea.height)
 		{
 			DrawTexturePro(layer[i].tx, {layer[i].src.x, layer[i].src.y, TILE_SIZE, TILE_SIZE}, {layer[i].sp.x, layer[i].sp.y, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, {0,0}, 0, WHITE);
 			if(!showDsc)
@@ -296,11 +295,11 @@ void editWorld(Rectangle worldArea, Tile& currTile, int ce)
 	}
 	
 	// draw each layer, dont show tile descriptor if in "player mode"
-	drawLayer(floors, RED, "F", (ce == UNDF));
-	drawLayer(doors, ORANGE, "D", (ce == UNDF));
-	drawLayer(buffs, YELLOW, "B", (ce == UNDF));
-	drawLayer(interactables,GREEN, "I", (ce == UNDF));
-	drawLayer(walls, BLUE, "W", (ce == UNDF));
+	drawLayer(floors, RED, worldArea, "F", (ce == UNDF));
+	drawLayer(doors, ORANGE, worldArea, "D", (ce == UNDF));
+	drawLayer(buffs, YELLOW, worldArea, "B", (ce == UNDF));
+	drawLayer(interactables,GREEN, worldArea, "I", (ce == UNDF));
+	drawLayer(walls, BLUE, worldArea, "W", (ce == UNDF));
 }
 
 int main()
@@ -349,7 +348,7 @@ int main()
 			// loading previously saved file
 			if(IsFileExtension(fileDialogState.fileNameText, ".txt"))
 			{
-				loadLayers(fileDialogState.fileNameText);
+				loadLayers(fileDialogState.fileNameText, worldArea);
 			}
 
             fileDialogState.SelectFilePressed = false;
@@ -389,6 +388,7 @@ int main()
 				worldArea.width += SCREEN_TILE_SIZE;
 			}
 
+			// Shrink world width button logic
 			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE * 3, edit_map_panel.y + PANEL_HEIGHT + SCREEN_TILE_SIZE, float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "-"))
 			{
 				worldArea.width -= SCREEN_TILE_SIZE;
@@ -400,6 +400,7 @@ int main()
 				worldArea.height += SCREEN_TILE_SIZE;
 			}
 
+			// shrink world height
 			if(GuiButton({edit_map_panel.x + SCREEN_TILE_SIZE * 3, edit_map_panel.y + PANEL_HEIGHT + (SCREEN_TILE_SIZE * 3), float(SCREEN_TILE_SIZE), float(SCREEN_TILE_SIZE)}, "-"))
 			{
 				worldArea.height -= SCREEN_TILE_SIZE;
