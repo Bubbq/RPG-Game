@@ -1,6 +1,7 @@
 #include <bits/types/FILE.h>
 #include <math.h>
 #include <raylib.h>
+#include <raymath.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,12 +35,22 @@ const char* TOXIC_HAND = "EnemyAssets/Basic Undead Animations/Toxic Hound/ToxicH
 const char* UNRAVELING_CRAWLER = "EnemyAssets/Basic Undead Animations/Toxic Hound/ToxicHound.png";
 const char* VAMPIRE_BAT = "EnemyAssets/Basic Undead Animations/Vampire Bat/VampireBat.png";
 const char* DEATH_PROMPT = "YOU DIED, RESPAWN?"; 
+const char* ARROW = "Assets/arrow.png";
 
 const int ANIMATION_SPEED = 20;
 const int FPS = 60;
 
 const float SPAWN_TIME = 1.00;
 const float LEVEL_TIME = 30.00;
+
+const float WEAPON_ACTIVATION = 1.00;
+const float WEAPON_USE = 0.10;
+
+// mouse position relative to 2D screen
+Vector2 mp;
+
+// availible weapons in the game
+Weapon DAGGER = {"dagger", (Vector2){0,0}, 0, 2, 3, 1.00};
 
 void StartTimer(Timer *timer, double lifetime)
 {
@@ -72,6 +83,18 @@ void resizeEntities(Entities* world_entities)
 	}
 }
 
+void resizeWeapons(Weapons* world_weapons)
+{
+	world_weapons->cap *= 2;
+	world_weapons->list = realloc(world_weapons->list, world_weapons->cap);
+	
+	if(world_weapons->list == NULL)
+	{
+		printf("ERROR RESZING ENTITIES \n");
+		exit(1);
+	}
+}
+
 void resizeLayer(TileList* layer)
 {
     layer->cap *= 2;
@@ -92,6 +115,16 @@ void addEntity(Entities* world_entities, Entity entity)
 	}
 
 	world_entities->entities[world_entities->size++] = entity;
+}
+
+void addWeapon(Weapons* world_weapons, Weapon weapon)
+{
+	if(world_weapons->n * sizeof(Weapon) == world_weapons->cap)
+	{
+		resizeWeapons(world_weapons);
+	}
+
+	world_weapons->list[world_weapons->n++] = weapon;
 }
 
 void addTile(TileList* layer, Tile tile)
@@ -256,7 +289,7 @@ Vector2 getSpawn()
 
 void init(World* world, Entity* player, Camera2D* camera)
 {
-	// SetTraceLogLevel(LOG_ERROR);
+	SetTraceLogLevel(LOG_ERROR);
 	InitWindow(SCREEN_WIDTH,SCREEN_HEIGHT, "2D-Engine");
 	SetTargetFPS(FPS);
 
@@ -274,6 +307,7 @@ void init(World* world, Entity* player, Camera2D* camera)
 	world->interactables.size = 0;
 	world->textures.size = 0;
 	world->entities.size = 0;
+	world->weapons.n = 0;
 
 	world->walls.list = malloc(TILE_CAP);
 	world->floors.list = malloc(TILE_CAP);
@@ -282,6 +316,7 @@ void init(World* world, Entity* player, Camera2D* camera)
 	world->damage_buffs.list = malloc(TILE_CAP);
 	world->interactables.list = malloc(TILE_CAP);
 	world->entities.entities = malloc(ENTITY_CAP);
+	world->weapons.list =  malloc(WEAPON_CAP);
 
     world->walls.cap = TILE_CAP;
     world->floors.cap = TILE_CAP;
@@ -290,6 +325,7 @@ void init(World* world, Entity* player, Camera2D* camera)
     world->damage_buffs.cap = TILE_CAP;
     world->interactables.cap = TILE_CAP;
 	world->entities.cap = ENTITY_CAP;
+	world->weapons.cap = WEAPON_CAP;
 
     loadWorld(world, WORLD_PATH);
 	
@@ -305,8 +341,11 @@ void init(World* world, Entity* player, Camera2D* camera)
 	player->anim_speed = ANIMATION_SPEED;
 	player->pos = (Vector2){world->spawn.x, world->spawn.y};
 	player->tx = addTexture(&world->textures, PLAYER_PATH);
+
+	player->weapon = DAGGER;
+	player->weapon.texture = addTexture(&world->textures, ARROW);
 	
-	camera->zoom = 1.50f;
+	camera->zoom = 1.00f;
 	camera->target = player->pos;
 	camera->offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
 }
@@ -320,6 +359,7 @@ void deinit(World *world)
 	free(world->damage_buffs.list);
 	free(world->interactables.list);
 	free(world->entities.entities);
+	free(world->weapons.list);
 
 	for(int i = 0; i < world->textures.size; i++)
 	{
@@ -384,12 +424,12 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		float dx = player->pos.x - en->pos.x;
 		float dy = player->pos.y - en->pos.y;
 
+		en->angle = atan2f(dy, dx) * RAD2DEG;
+
 		// getting angular speed
 		en->dx = cosf(en->angle * DEG2RAD) * en->speed;
 		en->dy = sinf(en->angle * DEG2RAD) * en->speed;
 
-		// make it nearest number divisible by 32
-		en->angle = atan2f(dy, dx) * RAD2DEG;
 
 		// angle correction
 		if(en->angle > 360)
@@ -441,10 +481,6 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		{
 			en->pos.y -= en->dy;
 		}
-
-		// displaying health bar
-		DrawRectangle(en->pos.x + 5, en->pos.y - 7, 20 * (en->health / 100), 7, RED);
-		DrawRectangleLines(en->pos.x + 5, en->pos.y - 7, 20, 7, BLACK);
 
 		// only draw entity when in bounds
 		if(CheckCollisionPointRec((Vector2){en->pos.x + SCREEN_TILE_SIZE, en->pos.y + SCREEN_TILE_SIZE}, world->area))
@@ -540,6 +576,14 @@ void move(TileList* world_walls, Entity* player)
 	player->move = false;
 }
 
+void displayHealthBar(Entity* player)
+{
+	// drawing the player's health bar
+	DrawRectangle(GetScreenWidth() - 310, GetScreenHeight() - 60, (300) * (player->health / 100),50, RED);
+	DrawRectangleLines(GetScreenWidth() - 310, GetScreenHeight() - 60, 300,50, BLACK);
+	DrawText("HEALTH", GetScreenWidth() - 300, GetScreenHeight() - 80, 20, RED);
+}
+
 void heal(TileList* world_heals, Entity* player)
 {
 	int h_col =  entityCollisionWorld(player, world_heals);
@@ -552,11 +596,6 @@ void heal(TileList* world_heals, Entity* player)
 			world_heals->list[h_col].active = false;
 		}
 	}
-
-	// drawing the player's health bar
-	DrawRectangle(GetScreenWidth() - 310, GetScreenHeight() - 60, (300) * (player->health / 100),50, RED);
-	DrawRectangleLines(GetScreenWidth() - 310, GetScreenHeight() - 60, 300,50, BLACK);
-	DrawText("HEALTH", GetScreenWidth() - 300, GetScreenHeight() - 80, 20, RED);
 }
 
 void fight(Entity* player, Entities* enemies)
@@ -609,7 +648,38 @@ void fight(Entity* player, Entities* enemies)
 		DrawText(lvl_dsc, 10, GetScreenHeight() - 80, 20, GREEN);
 }
 
-void updatePlayer(TileList* world_walls, Entity* player)
+void updateProjectiles(Weapons* world_weapons, Rectangle screen)
+{
+	for(int i = 0; i < world_weapons->n; i++)
+	{
+		Weapon* wp = &world_weapons->list[i];
+
+		if(!wp->on_screen) continue;
+
+		// find angular movement
+		float dx = cosf(wp->angle * DEG2RAD) * wp->speed;
+		float dy = sinf(wp->angle * DEG2RAD) * wp->speed;
+
+		// move projectile
+		wp->pos = Vector2Add(wp->pos, (Vector2){dx, dy});
+
+		// only draw if onscreen
+		if(CheckCollisionPointRec((Vector2){wp->pos.x + SCREEN_TILE_SIZE, wp->pos.y + SCREEN_TILE_SIZE}, screen))
+		{
+			DrawTexturePro(wp->texture, (Rectangle){0, 8, TILE_SIZE, TILE_SIZE},
+											 (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, wp->angle, WHITE);
+		}
+
+		else
+		{
+			wp->on_screen = false;
+			wp->pos = (Vector2){-100000000, -100000000};
+			wp->speed = 0;
+		}
+	}
+}
+
+void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entity* player, Rectangle screen)
 {
 	// animation
 	player->frame_count++;
@@ -619,7 +689,34 @@ void updatePlayer(TileList* world_walls, Entity* player)
 		player->xfp = 0;
 		player->frame_count = 0;
 	}
-	
+
+	// weapons
+	if(TimerDone(player->weapon.interval_timer))
+	{
+		StartTimer(&player->weapon.interval_timer, player->weapon.interval_time);
+		
+		// putting the weapon to the screen
+		player->weapon.pos = player->pos;
+		player->weapon.on_screen = true;
+
+		// finding weapons angle
+		float dx = mp.x - player->pos.x;
+		float dy = mp.y - player->pos.y;
+		float angle = atan2f(dy, dx) * RAD2DEG;
+
+		// angle correction
+		if(angle > 360) angle -= 360;
+		if(angle < 0) angle += 360;
+
+		player->weapon.angle = angle;
+
+		addWeapon(world_weapons, player->weapon);
+	}
+
+	// updating all weapons
+	updateProjectiles(world_weapons, screen);
+
+	// movement
 	move(world_walls, player);
 
 	// drawing player
@@ -627,74 +724,72 @@ void updatePlayer(TileList* world_walls, Entity* player)
 										(Rectangle){player->pos.x, player->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, 0, WHITE);
 }
 
-Entity createEnemy(World* world, Camera2D* camera)
+void createEnemy(World* world, Camera2D* camera)
 {
-	// basic mob properties
-	Entity new_en;
-	new_en.health = 100;
-	new_en.speed = 1;
-	new_en.alive = true;
-	new_en.anim_speed = ANIMATION_SPEED;
-	new_en.id = GetRandomValue(0, 1000000000);
-
-	// randomly generate enemy texture
-	Texture2D tx;
-	int rand_tx = GetRandomValue(1, 13);
-
-	switch (rand_tx)
-	{
-		case 1:	tx = addTexture(&world->textures, BOUND_CADAVER); break;
-		case 2:	tx = addTexture(&world->textures, BRITTLE_ARCHER); break;
-		case 3:	tx = addTexture(&world->textures, CARCASS_FEEDER); break;
-		case 4:	tx = addTexture(&world->textures, DISMEMBERED_CRAWLER); break;
-		case 5:	tx = addTexture(&world->textures, GHASTLY_EYE); break;
-		case 6:	tx = addTexture(&world->textures, GIANT_ROYAL_SCARAB); break;
-		case 7:	tx = addTexture(&world->textures, GRAVE_REVANENT); break;
-		case 8:	tx = addTexture(&world->textures, MUTILATED_STUMBLER); break;
-		case 9:	tx = addTexture(&world->textures, SAND_GHOUL); break;
-		case 10: tx = addTexture(&world->textures, SKITTERING_HAND); break;
-		case 11: tx = addTexture(&world->textures, TOXIC_HAND); break;
-		case 12: tx = addTexture(&world->textures, UNRAVELING_CRAWLER); break;
-		case 13: tx = addTexture(&world->textures, VAMPIRE_BAT); break;
-		default:
-			break;
-	}
-
-	new_en.tx = tx;
-	
-	// randomly spawn entity outside view of the player
-	float cox = camera->offset.x;
-	float coy = camera->offset.y;
-	float ctx = camera->target.x;
-	float cty = camera->target.y;
-	int rand_pos = GetRandomValue(1, 4);
-
-	switch (rand_pos)
-	{
-		// left side, varaible y
-		case 1: new_en.pos = (Vector2){ctx - cox, GetRandomValue(cty - coy, cty + coy)}; break;
-		// top side, varaible x
-		case 2: new_en.pos = (Vector2){GetRandomValue(ctx - cox, ctx + cox), cty - coy}; break;
-		// right side, varaible y
-		case 3: new_en.pos = (Vector2){ctx + cox, GetRandomValue(cty - coy, cty + coy)}; break;
-		// bottom side, varaible x
-		case 4: new_en.pos = (Vector2){GetRandomValue(ctx + cox, ctx + cox), cty + coy}; break;
-		default:
-			break;
-	}
-
-	return new_en;
-}
-
-void spawnEnemies(World* world, Camera2D* camera)
-{
-	// spawn enemies every second
 	if(TimerDone(world->spawn_timer))
 	{
 		// create enemy that has no collisions
-		Entity en = createEnemy(world, camera);
-		while(entityCollisionEntity(&en, &world->entities) >= 0) en = createEnemy(world, camera);
-		addEntity(&world->entities, en);
+		StartTimer(&world->spawn_timer, world->spawn_time);
+		// basic mob properties
+		Entity new_en;
+		new_en.health = 100;
+		new_en.speed = 1;
+		new_en.alive = true;
+		new_en.anim_speed = ANIMATION_SPEED;
+		new_en.id = GetRandomValue(0, 1000000000);
+
+		// randomly generate enemy texture
+		Texture2D tx;
+		int rand_tx = GetRandomValue(1, 13);
+
+		switch (rand_tx)
+		{
+			case 1:	tx = addTexture(&world->textures, BOUND_CADAVER); break;
+			case 2:	tx = addTexture(&world->textures, BRITTLE_ARCHER); break;
+			case 3:	tx = addTexture(&world->textures, CARCASS_FEEDER); break;
+			case 4:	tx = addTexture(&world->textures, DISMEMBERED_CRAWLER); break;
+			case 5:	tx = addTexture(&world->textures, GHASTLY_EYE); break;
+			case 6:	tx = addTexture(&world->textures, GIANT_ROYAL_SCARAB); break;
+			case 7:	tx = addTexture(&world->textures, GRAVE_REVANENT); break;
+			case 8:	tx = addTexture(&world->textures, MUTILATED_STUMBLER); break;
+			case 9:	tx = addTexture(&world->textures, SAND_GHOUL); break;
+			case 10: tx = addTexture(&world->textures, SKITTERING_HAND); break;
+			case 11: tx = addTexture(&world->textures, TOXIC_HAND); break;
+			case 12: tx = addTexture(&world->textures, UNRAVELING_CRAWLER); break;
+			case 13: tx = addTexture(&world->textures, VAMPIRE_BAT); break;
+			default:
+				break;
+		}
+
+		new_en.tx = tx;
+		
+		// randomly spawn entity outside view of the player
+		float cox = camera->offset.x;
+		float coy = camera->offset.y;
+		float ctx = camera->target.x;
+		float cty = camera->target.y;
+
+		// continue to update position until we get an entity that has no collisions with any walls or other entitites
+		do
+		{
+			int rand_pos = GetRandomValue(1, 4);
+			switch (rand_pos)
+			{
+				// left side, varaible y
+				case 1: new_en.pos = (Vector2){ctx - cox, GetRandomValue(cty - coy, cty + coy)}; break;
+				// top side, varaible x
+				case 2: new_en.pos = (Vector2){GetRandomValue(ctx - cox, ctx + cox), cty - coy}; break;
+				// right side, varaible y
+				case 3: new_en.pos = (Vector2){ctx + cox, GetRandomValue(cty - coy, cty + coy)}; break;
+				// bottom side, varaible x
+				case 4: new_en.pos = (Vector2){GetRandomValue(ctx + cox, ctx + cox), cty + coy}; break;
+				default:
+					break;
+			}
+
+		} while(entityCollisionEntity(&new_en, &world->entities) >=0 || entityCollisionWorld(&new_en, &world->walls) >= 0);	
+
+		addEntity(&world->entities, new_en);
 		StartTimer(&world->spawn_timer, world->spawn_time);
 	}
 
@@ -741,7 +836,6 @@ bool deathWindow(World* world, Entity* player)
 
 int main()
 {
-	// Vector2 mp;
     World world;
 	Entity player;
 	Camera2D camera;
@@ -749,11 +843,14 @@ int main()
 
 	while(!WindowShouldClose())
     {
-		// mp = GetScreenToWorld2D(GetMousePosition(), player.camera);
+		mp = GetScreenToWorld2D(GetMousePosition(), camera);
 		camera.target = player.pos;
 		world.area = (Rectangle){camera.target.x - camera.offset.x, camera.target.y - camera.offset.y, SCREEN_WIDTH, SCREEN_HEIGHT};
 
-	    BeginDrawing();
+		createEnemy(&world, &camera);
+		fight(&player, &world.entities);
+	    
+		BeginDrawing();
 			if(player.alive)
 			{
 				ClearBackground(BLACK);
@@ -765,21 +862,20 @@ int main()
 					drawLayer(&world.interactables, &world.area);
 					drawLayer(&world.walls, &world.area);
 					updateEntities(&world.entities, &player, &world);
-					updatePlayer(&world.walls, &player);
+					updatePlayer(&world.walls, &world.weapons, &player, world.area);
 				EndMode2D();
-				
-				spawnEnemies(&world, &camera);
+
+				displayHealthBar(&player);
 				heal(&world.health_buffs, &player);
-				fight(&player, &world.entities);
 			}
 
 			// death screen
-			else
+			else 
 			{
 				if(deathWindow(&world, &player)) break;
 			}
 
-		DrawFPS(0, 0);
+			DrawFPS(0, 0);
 		EndDrawing();
     }
 

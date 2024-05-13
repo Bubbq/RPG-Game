@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <raylib.h>
 
@@ -11,6 +12,33 @@ enum Element
 	INTERACTABLE = 5,
 	SPAWN = 6,
 };
+typedef struct
+{
+	double startTime;
+	double lifeTime;
+} Timer;
+
+typedef struct
+{
+	const char* name;
+	Vector2 pos;
+	float angle;
+	float speed;
+	// how many of that weapon do we have
+	int count;
+	float interval_time;
+	// time in-between weapon activations 
+	Timer interval_timer;
+	Texture2D texture;
+	bool on_screen;
+} Weapon;
+
+typedef struct
+{
+	Weapon arsenal[5];
+	// how many weapons we currently have
+	int n;
+} Backpack;
 
 typedef struct
 {
@@ -25,12 +53,6 @@ typedef struct
 	int frames;
 	int anim_speed;
 } Tile;
-
-typedef struct
-{
-	double startTime;
-	double lifeTime;
-} Timer;
 
 typedef struct
 {
@@ -57,6 +79,7 @@ typedef struct
 	float dy;
 	int anim_speed;
 	float damage;
+	Weapon weapon;
 } Entity;
 
 typedef struct
@@ -80,6 +103,13 @@ typedef struct
 
 typedef struct
 {
+	Weapon* list;
+	int n;
+	size_t cap;
+} Weapons;
+
+typedef struct
+{
 	Entity* entities;
 	int size;
 	size_t cap;
@@ -87,6 +117,7 @@ typedef struct
 
 typedef struct
 {
+	Weapons weapons;
 	Entities entities;
 	TileList walls;
 	TileList floors;
@@ -105,6 +136,7 @@ typedef struct
 
 const size_t TILE_CAP = (25 * sizeof(Tile));
 const size_t ENTITY_CAP = (3 * sizeof(Entity));
+const size_t WEAPON_CAP = (25 * sizeof(Weapon));
 const int TEXTURE_CAP = 25;
 const int TILE_SIZE = 16;
 const float SCALE = 2.0f;
