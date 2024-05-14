@@ -50,7 +50,10 @@ const float WEAPON_USE = 0.10;
 Vector2 mp;
 
 // availible weapons in the game
-Weapon DAGGER = {"dagger", (Vector2){0,0}, 0, 2, 3, 1.00};
+// blade that points wherever the mouse points
+Weapon DAGGER = {"dagger", (Vector2){0,0}, 0, 4, 3, 1.00};
+Timer weapon_times[5][5];
+bool add_weapon[5][5];
 
 void StartTimer(Timer *timer, double lifetime)
 {
@@ -338,19 +341,32 @@ void init(World* world, Entity* player, Camera2D* camera)
 	player->speed = 5;
 	player->health = 100;
 	player->frame_count = 0;
+	player->angle = 0.00;
 	player->anim_speed = ANIMATION_SPEED;
 	player->pos = (Vector2){world->spawn.x, world->spawn.y};
 	player->tx = addTexture(&world->textures, PLAYER_PATH);
-
-	player->weapon = DAGGER;
-	player->weapon.texture = addTexture(&world->textures, ARROW);
 	
+	player->weapon.n = 0;
+	player->weapon.list = malloc(WEAPON_CAP);
+	player->weapon.cap = WEAPON_CAP;
+
+	Weapon swp = DAGGER;
+	swp.texture = addTexture(&world->textures, ARROW);
+	swp.interval_time = 1.00;
+	swp.add = true;
+
+	// starting weapn row add flag should be true
+    memset(add_weapon, false, sizeof(add_weapon));
+    memset(add_weapon[0], true, sizeof(add_weapon[0]));
+
+	addWeapon(&player->weapon, swp);
+
 	camera->zoom = 1.00f;
 	camera->target = player->pos;
 	camera->offset = (Vector2){GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f};
 }
 
-void deinit(World *world)
+void deinit(World* world, Entity* player)
 {
 	free(world->walls.list);
 	free(world->floors.list);
@@ -360,6 +376,7 @@ void deinit(World *world)
 	free(world->interactables.list);
 	free(world->entities.entities);
 	free(world->weapons.list);
+	free(player->weapon.list);
 
 	for(int i = 0; i < world->textures.size; i++)
 	{
@@ -367,6 +384,36 @@ void deinit(World *world)
 	}
 
 	CloseWindow();
+}
+
+int projectileCollisionWorld(Weapon* wp, TileList* layer)
+{
+	for(int i = 0; i < layer->size; i++)
+	{
+		Tile* tile = &layer->list[i];
+		if(CheckCollisionRecs((Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE},
+							(Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && tile->active)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+int projectileCollisionEntity(Weapon* wp, Entities* world_entities)
+{
+	for(int i = 0; i < world_entities->size; i++)
+	{
+		Entity* en = &world_entities->entities[i];
+		if(CheckCollisionRecs((Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE},
+							(Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 // returns the index of the tile of a layer you collided with
@@ -399,6 +446,18 @@ int entityCollisionEntity(Entity* en, Entities* ents)
 	return -1;
 }
 
+float getAngle(Vector2 v1, Vector2 v2)
+{
+	float dx = v1.x - v2.x;
+	float dy = v1.y - v2.y;
+
+	float angle = atan2f(dy, dx) * RAD2DEG;
+	if(angle > 360) angle -= 360;
+	else if(angle < 0) angle += 360;
+
+	return angle;
+}
+
 void updateEntities(Entities* world_entities, Entity* player, World* world)
 {
 	int wall_col, en_col = -1;
@@ -420,11 +479,8 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 			en->xfp = 0;
 		}
 
-		// find entities angle 
-		float dx = player->pos.x - en->pos.x;
-		float dy = player->pos.y - en->pos.y;
-
-		en->angle = atan2f(dy, dx) * RAD2DEG;
+		// en->angle = atan2f(dy, dx) * RAD2DEG;
+		en->angle = getAngle(player->pos, en->pos);
 
 		// getting angular speed
 		en->dx = cosf(en->angle * DEG2RAD) * en->speed;
@@ -440,27 +496,6 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		if(en->angle < 0)
 		{
 			en->angle += 360;
-		}
-
-		// setting sprite direction based on angle
-		if(en->angle > 45 && en->angle < 135)
-		{
-			en->yfp = 0;
-		}
-		
-		else if(en->angle > 225 && en->angle < 315)
-		{
-			en->yfp = 1;
-		}
-
-		else if(en->angle > 135 && en->angle < 215)
-		{
-			en->yfp = 3;
-		}
-
-		else
-		{
-			en->yfp = 2;
 		}
 
 		// collisions between walls and other enitites
@@ -485,7 +520,7 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		// only draw entity when in bounds
 		if(CheckCollisionPointRec((Vector2){en->pos.x + SCREEN_TILE_SIZE, en->pos.y + SCREEN_TILE_SIZE}, world->area))
 		{
-			DrawTexturePro(en->tx, (Rectangle){en->xfp * TILE_SIZE, en->yfp * TILE_SIZE, TILE_SIZE, TILE_SIZE},
+			DrawTexturePro(en->tx, (Rectangle){en->xfp * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE},
 										(Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, 0, WHITE);
 		}
 	}
@@ -617,27 +652,6 @@ void fight(Entity* player, Entities* enemies)
 					player->alive = false;
 				}
 			}
-
-			// doing damage to mob
-			if(IsKeyPressed(KEY_E))
-			{
-				fight_en->health = fight_en->health - 20 > 0 ? fight_en->health - 20 : 0;
-				
-				// killing an enemy
-				if(fight_en->health == 0)
-				{
-					fight_en->alive = false;
-					fight_en->pos = (Vector2){-1000000, -1000000};
-					
-					// gaining experience/leveling up
-					player->exp += 20;
-					if(player->exp >= 100)
-					{
-						player->exp = 0;
-						player->level++;
-					}
-				}
-			}
 		}
 		
 		// drawing and updating players level
@@ -648,7 +662,7 @@ void fight(Entity* player, Entities* enemies)
 		DrawText(lvl_dsc, 10, GetScreenHeight() - 80, 20, GREEN);
 }
 
-void updateProjectiles(Weapons* world_weapons, Rectangle screen)
+void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* world_entities, Entity* player, Rectangle screen)
 {
 	for(int i = 0; i < world_weapons->n; i++)
 	{
@@ -676,10 +690,44 @@ void updateProjectiles(Weapons* world_weapons, Rectangle screen)
 			wp->pos = (Vector2){-100000000, -100000000};
 			wp->speed = 0;
 		}
+
+		int wall_col = projectileCollisionWorld(wp, world_walls);
+		if(wall_col >= 0)
+		{
+			wp->on_screen = false;
+			wp->pos = (Vector2){-100000000, -100000000};
+			wp->speed = 0;
+		}
+
+		int en_col = projectileCollisionEntity(wp, world_entities);
+		if(en_col >= 0)
+		{
+			wp->on_screen = false;
+			wp->pos = (Vector2){-100000000, -100000000};
+			wp->speed = 0;
+
+			Entity* hit_en = &world_entities->entities[en_col];
+			hit_en->health -= 20;
+				
+				// killing an enemy
+				if(hit_en->health <= 0)
+				{
+					hit_en->alive = false;
+					hit_en->pos = (Vector2){-1000000, -1000000};
+					
+					// gaining experience/leveling up
+					player->exp += 20;
+					if(player->exp >= 100)
+					{
+						player->exp = 0;
+						player->level++;
+					}
+				}
+		}
 	}
 }
 
-void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entity* player, Rectangle screen)
+void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player, Rectangle screen)
 {
 	// animation
 	player->frame_count++;
@@ -690,31 +738,39 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entity* player,
 		player->frame_count = 0;
 	}
 
-	// weapons
-	if(TimerDone(player->weapon.interval_timer))
+	// weapons, need to start the timer at the same time
+	for(int i = 0; i < player->weapon.n; i++)
 	{
-		StartTimer(&player->weapon.interval_timer, player->weapon.interval_time);
-		
-		// putting the weapon to the screen
-		player->weapon.pos = player->pos;
-		player->weapon.on_screen = true;
+		Weapon* wp = &player->weapon.list[i];
 
-		// finding weapons angle
-		float dx = mp.x - player->pos.x;
-		float dy = mp.y - player->pos.y;
-		float angle = atan2f(dy, dx) * RAD2DEG;
+		for(int j = 0; j < wp->count; j++)
+		{
+			if(TimerDone(weapon_times[i][j]) && add_weapon[i][j])
+			{
+				// reset flag and update params
+				add_weapon[i][j] = false;
+				wp->on_screen = true;
+				wp->pos = player->pos;
+				// this will change based on the weapon!
+				wp->angle = getAngle(mp, player->pos);
 
-		// angle correction
-		if(angle > 360) angle -= 360;
-		if(angle < 0) angle += 360;
+				addWeapon(world_weapons, *wp);
+			}
+		}
 
-		player->weapon.angle = angle;
-
-		addWeapon(world_weapons, player->weapon);
+		// have the timers start at the same time
+		if(TimerDone(weapon_times[i][wp->count - 1]))
+		{
+			for(int k = 0; k < wp->count; k++)
+			{
+				StartTimer(&weapon_times[i][k], wp->interval_time + (k / 10.00));
+				add_weapon[i][k] = true;
+			}
+		}
 	}
 
 	// updating all weapons
-	updateProjectiles(world_weapons, screen);
+	updateProjectiles(world_weapons, world_walls, world_entities, player, screen);
 
 	// movement
 	move(world_walls, player);
@@ -862,7 +918,7 @@ int main()
 					drawLayer(&world.interactables, &world.area);
 					drawLayer(&world.walls, &world.area);
 					updateEntities(&world.entities, &player, &world);
-					updatePlayer(&world.walls, &world.weapons, &player, world.area);
+					updatePlayer(&world.walls, &world.weapons, &world.entities, &player, world.area);
 				EndMode2D();
 
 				displayHealthBar(&player);
@@ -879,6 +935,6 @@ int main()
 		EndDrawing();
     }
 
-    deinit(&world);
+    deinit(&world, &player);
     return 0;
 }

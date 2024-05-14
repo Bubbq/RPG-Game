@@ -31,7 +31,15 @@ typedef struct
 	Timer interval_timer;
 	Texture2D texture;
 	bool on_screen;
+	bool add;
 } Weapon;
+
+typedef struct
+{
+	Weapon* list;
+	int n;
+	size_t cap;
+} Weapons;
 
 typedef struct
 {
@@ -79,7 +87,7 @@ typedef struct
 	float dy;
 	int anim_speed;
 	float damage;
-	Weapon weapon;
+	Weapons weapon;
 } Entity;
 
 typedef struct
@@ -101,12 +109,7 @@ typedef struct
 	int size;
 } Textures;
 
-typedef struct
-{
-	Weapon* list;
-	int n;
-	size_t cap;
-} Weapons;
+
 
 typedef struct
 {
