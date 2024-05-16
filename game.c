@@ -1,5 +1,3 @@
-#include <bits/types/FILE.h>
-#include <math.h>
 #include <raylib.h>
 #include <raymath.h>
 #include <stdbool.h>
@@ -7,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "game.h"
+
+#define MAX_WEAPONS 5
+#define MAX_WEAPON_COUNT 6
 
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
@@ -17,10 +18,11 @@ const int SCREEN_WIDTH = 992;
 const int SCREEN_HEIGHT = 992;
 
 // update path to world you have previously saved
-const char* WORLD_PATH = "test.txt";
+const char* WORLD_PATH = "world.txt";
 const char* SPAWN_PATH = "spawn.txt";
-const char* PLAYER_PATH = "Assets/player.png";
 
+// paths to entities textures
+const char* PLAYER_PATH = "Assets/player.png";
 const char* BOUND_CADAVER = "EnemyAssets/Basic Undead Animations/Bound Cadaver/BoundCadaver.png";
 const char* BRITTLE_ARCHER = "EnemyAssets/Basic Undead Animations/Brittle Archer/BrittleArcher.png";
 const char* CARCASS_FEEDER = "EnemyAssets/Basic Undead Animations/Carcass Feeder/CarcassFeeder.png";
@@ -40,20 +42,24 @@ const char* ARROW = "Assets/arrow.png";
 const int ANIMATION_SPEED = 20;
 const int FPS = 60;
 
+// game times (in seconds)
 const float SPAWN_TIME = 1.00;
 const float LEVEL_TIME = 30.00;
-
 const float WEAPON_ACTIVATION = 1.00;
 const float WEAPON_USE = 0.10;
+
+// null elements (using lazy deletion)
+const Entity NULL_ENTITY = (Entity){0};
+const Weapon NULL_WEAPON = (Weapon){0};
 
 // mouse position relative to 2D screen
 Vector2 mp;
 
-// availible weapons in the game
 // blade that points wherever the mouse points
-Weapon DAGGER = {"dagger", (Vector2){0,0}, 0, 4, 3, 1.00};
-Timer weapon_times[5][5];
-bool add_weapon[5][5];
+Weapon DAGGER = {"dagger", (Vector2){0,0}, 20, 0, 2, 6, 1.00};
+
+Timer weapon_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
+bool add_weapon[MAX_WEAPONS][MAX_WEAPON_COUNT];
 
 void StartTimer(Timer *timer, double lifetime)
 {
@@ -72,6 +78,14 @@ void clearEntities(Entities* world_entities)
 	world_entities->entities = malloc(ENTITY_CAP);
 	world_entities->cap = ENTITY_CAP;
 	world_entities->size = 0;
+}
+
+void clearWeapons(Weapons* world_weapons)
+{
+	free(world_weapons->list);
+	world_weapons->list = malloc(WEAPON_CAP);
+	world_weapons->cap = WEAPON_CAP;
+	world_weapons->size = 0;
 }
 
 void resizeEntities(Entities* world_entities)
@@ -93,7 +107,7 @@ void resizeWeapons(Weapons* world_weapons)
 	
 	if(world_weapons->list == NULL)
 	{
-		printf("ERROR RESZING ENTITIES \n");
+		printf("ERROR RESZING WEAPONS \n");
 		exit(1);
 	}
 }
@@ -105,37 +119,28 @@ void resizeLayer(TileList* layer)
     
     if(layer == NULL)
     {
-        printf("ERROR RESIZING \n");
+        printf("ERROR RESIZING TILE LAYER\n");
         exit(1);
     }
 }
 
 void addEntity(Entities* world_entities, Entity entity)
 {
-	if(world_entities->size * sizeof(Entity) == world_entities->cap)
-	{
-		resizeEntities(world_entities);
-	}
+	if(world_entities->size * sizeof(Entity) == world_entities->cap) resizeEntities(world_entities);
 
 	world_entities->entities[world_entities->size++] = entity;
 }
 
 void addWeapon(Weapons* world_weapons, Weapon weapon)
 {
-	if(world_weapons->n * sizeof(Weapon) == world_weapons->cap)
-	{
-		resizeWeapons(world_weapons);
-	}
+	if(world_weapons->size * sizeof(Weapon) == world_weapons->cap) resizeWeapons(world_weapons);
 
-	world_weapons->list[world_weapons->n++] = weapon;
+	world_weapons->list[world_weapons->size++] = weapon;
 }
 
 void addTile(TileList* layer, Tile tile)
 {
-    if(layer->size * sizeof(Tile) == layer->cap)
-    {
-        resizeLayer(layer);
-    }
+    if(layer->size * sizeof(Tile) == layer->cap) resizeLayer(layer);
 
     layer->list[layer->size++] = tile;
 }
@@ -240,10 +245,7 @@ void drawLayer(TileList* layer, Rectangle* world_area)
     {
 		Tile* tile = &layer->list[i];
 		
-		if(!tile->active)
-		{
-			continue;
-		}
+		if(!tile->active) continue;
 
 		int frame_pos = 0;
 
@@ -251,24 +253,25 @@ void drawLayer(TileList* layer, Rectangle* world_area)
 		if(tile->anim)
 		{
 			tile->fc++;
-			frame_pos = tile->fc / tile->anim_speed;
-
-			if(frame_pos > tile->frames)
-			{
-				frame_pos = 0;
-				tile->fc = 0;
-			}
+			frame_pos = (tile->fc / tile->anim_speed);
+			if(frame_pos > tile->frames) frame_pos = tile->fc = 0;
 		}
 
 		// only draw when in screen
-		if(CheckCollisionPointRec((Vector2){tile->sp.x + SCREEN_TILE_SIZE, tile->sp.y + SCREEN_TILE_SIZE}, *world_area))
+		if(CheckCollisionPointRec(tile->sp, *world_area))
 		{
-			DrawTexturePro(tile->tx, (Rectangle){tile->src.x + (frame_pos * TILE_SIZE), tile->src.y, TILE_SIZE, TILE_SIZE},
-										(Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, 0, WHITE);
+			tile->on_screen = true;
+
+			Rectangle src_area = (Rectangle){tile->src.x + (frame_pos * TILE_SIZE), tile->src.y, TILE_SIZE, TILE_SIZE};
+			Rectangle dst_area = (Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+			DrawTexturePro(tile->tx, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 		}
+
+		else tile->on_screen = false;
     }
 }
 
+// returns the spawn point of the world from 'spawn.txt' file
 Vector2 getSpawn()
 {
 	FILE* inFile = fopen(SPAWN_PATH, "r");
@@ -292,7 +295,7 @@ Vector2 getSpawn()
 
 void init(World* world, Entity* player, Camera2D* camera)
 {
-	SetTraceLogLevel(LOG_ERROR);
+	// SetTraceLogLevel(LOG_ERROR);
 	InitWindow(SCREEN_WIDTH,SCREEN_HEIGHT, "2D-Engine");
 	SetTargetFPS(FPS);
 
@@ -310,7 +313,7 @@ void init(World* world, Entity* player, Camera2D* camera)
 	world->interactables.size = 0;
 	world->textures.size = 0;
 	world->entities.size = 0;
-	world->weapons.n = 0;
+	world->weapons.size = 0;
 
 	world->walls.list = malloc(TILE_CAP);
 	world->floors.list = malloc(TILE_CAP);
@@ -346,10 +349,11 @@ void init(World* world, Entity* player, Camera2D* camera)
 	player->pos = (Vector2){world->spawn.x, world->spawn.y};
 	player->tx = addTexture(&world->textures, PLAYER_PATH);
 	
-	player->weapon.n = 0;
+	player->weapon.size = 0;
 	player->weapon.list = malloc(WEAPON_CAP);
 	player->weapon.cap = WEAPON_CAP;
 
+	// starting weapon
 	Weapon swp = DAGGER;
 	swp.texture = addTexture(&world->textures, ARROW);
 	swp.interval_time = 1.00;
@@ -378,86 +382,100 @@ void deinit(World* world, Entity* player)
 	free(world->weapons.list);
 	free(player->weapon.list);
 
-	for(int i = 0; i < world->textures.size; i++)
-	{
-		UnloadTexture(world->textures.better_textures[i].tx);
-	}
+	for(int i = 0; i < world->textures.size; i++) UnloadTexture(world->textures.better_textures[i].tx);
 
 	CloseWindow();
 }
 
+// returns the index of the tile from some layer that a projectile collides with
 int projectileCollisionWorld(Weapon* wp, TileList* layer)
 {
 	for(int i = 0; i < layer->size; i++)
 	{
 		Tile* tile = &layer->list[i];
-		if(CheckCollisionRecs((Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE},
-							(Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && tile->active)
-		{
-			return i;
-		}
+
+		// only interested in tiles on the screen
+		if(!tile->on_screen) continue;
+
+		Rectangle wp_area  = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		Rectangle en_area = (Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+
+		if(CheckCollisionRecs(wp_area,en_area) && tile->active) return i;
 	}
 
 	return -1;
 }
 
+// returns the index of the enity that some projectile collides with
 int projectileCollisionEntity(Weapon* wp, Entities* world_entities)
 {
 	for(int i = 0; i < world_entities->size; i++)
 	{
 		Entity* en = &world_entities->entities[i];
-		if(CheckCollisionRecs((Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE},
-							(Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}))
-		{
-			return i;
-		}
+		
+		// only interested in entities that we can see
+		if(!en->on_screen) continue;
+
+		Rectangle wp_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+
+		if(CheckCollisionRecs(wp_area, en_area)) return i;
 	}
 
 	return -1;
 }
 
-// returns the index of the tile of a layer you collided with
+// returns index of the tile from some layer that an entity collides with
 int entityCollisionWorld(Entity* en, TileList* layer)
 {
 	for(int i = 0; i < layer->size; i++)
 	{
-		if(CheckCollisionRecs((Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE},
-							(Rectangle){layer->list[i].sp.x, layer->list[i].sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && layer->list[i].active)
-		{
-			return i;
-		}
+		Tile* tile = &layer->list[i];
+
+		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		Rectangle tile_area = (Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+
+		if(CheckCollisionRecs(en_area, tile_area) && tile->active) return i;
 	}
 
 	return -1;
 }
 
-// returns index of entity that an entity 'en' has collided with
-int entityCollisionEntity(Entity* en, Entities* ents)
+// returns index of the entity that some entity collides with
+int entityCollisionEntity(Entity* entity, Entities* world_entities)
 {
-	for(int i = 0; i < ents->size; i++)
+	for(int i = 0; i < world_entities->size; i++)
 	{
-		if(CheckCollisionPointRec((Vector2){en->pos.x + TILE_SIZE, en->pos.y + TILE_SIZE},
-							(Rectangle){ents->entities[i].pos.x, ents->entities[i].pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}) && ents->entities[i].id != en->id)
-		{
-			return i;
-		}
+		Entity* en = &world_entities->entities[i];
+		
+		// only care about alive entities
+		if(!en->alive) continue;
+		
+		Vector2 curr_en_pos = (Vector2){entity->pos.x + TILE_SIZE, entity->pos.y + TILE_SIZE};
+		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+
+		if(CheckCollisionPointRec(curr_en_pos, en_area) && (en->id != entity->id)) return i;
 	}
 
 	return -1;
 }
 
+// returns angle (in degrees) from 2 cartesian coordinates
 float getAngle(Vector2 v1, Vector2 v2)
 {
 	float dx = v1.x - v2.x;
 	float dy = v1.y - v2.y;
 
 	float angle = atan2f(dy, dx) * RAD2DEG;
+	
+	// angle correction
 	if(angle > 360) angle -= 360;
 	else if(angle < 0) angle += 360;
 
 	return angle;
 }
 
+// enemy movement, animation, and damage dealing to the player
 void updateEntities(Entities* world_entities, Entity* player, World* world)
 {
 	int wall_col, en_col = -1;
@@ -466,79 +484,88 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 	{
 		Entity* en = &world_entities->entities[i];
 		
-		if(!en->alive)
-		{
-			continue;
-		}
+		// only interested in alive entities
+		if(!en->alive) continue;
 
+		// animation
 		en->frame_count++;
 		en->xfp = (en->frame_count / en->anim_speed);
-		if(en->xfp > 3)
-		{
-			en->frame_count = 0;
-			en->xfp = 0;
-		}
 
-		// en->angle = atan2f(dy, dx) * RAD2DEG;
+		// resetting frames
+		if(en->xfp > 3) en->frame_count = en->xfp = 0;
+
+		// finding angular speed
 		en->angle = getAngle(player->pos, en->pos);
-
-		// getting angular speed
 		en->dx = cosf(en->angle * DEG2RAD) * en->speed;
 		en->dy = sinf(en->angle * DEG2RAD) * en->speed;
 
-
-		// angle correction
-		if(en->angle > 360)
-		{
-			en->angle -= 360;
-		}
-
-		if(en->angle < 0)
-		{
-			en->angle += 360;
-		}
+		en->pos.x += en->dx;
 
 		// collisions between walls and other enitites
-		en->pos.x += en->dx;
 		wall_col = entityCollisionWorld(en, &world->walls);
 		en_col = entityCollisionEntity(en, &world->entities);
 
-		if(wall_col >= 0 || en_col >= 0)
-		{
-			en->pos.x -= en->dx;
-		}
+		if(wall_col >= 0 || en_col >= 0) en->pos.x -= en->dx;
 
 		en->pos.y += en->dy;
+		
 		wall_col = entityCollisionWorld(en, &world->walls);
 		en_col = entityCollisionEntity(en, &world->entities);
 
-		if(wall_col >= 0 || en_col >= 0)
+		if(wall_col >= 0 || en_col >= 0) en->pos.y -= en->dy;
+
+		// doing damage to the player
+		Vector2 ppos = (Vector2){player->pos.x + TILE_SIZE, player->pos.y + TILE_SIZE};
+		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		
+		if(CheckCollisionPointRec(ppos, en_area))
 		{
-			en->pos.y -= en->dy;
+			// deal damage based on hit speed
+			if(TimerDone(en->hit_timer))
+			{		
+				player->health -= en->damage;
+				if(player->health <= 0) player->alive = false; 
+
+				StartTimer(&en->hit_timer, 1.00);
+			}
 		}
 
 		// only draw entity when in bounds
 		if(CheckCollisionPointRec((Vector2){en->pos.x + SCREEN_TILE_SIZE, en->pos.y + SCREEN_TILE_SIZE}, world->area))
 		{
-			DrawTexturePro(en->tx, (Rectangle){en->xfp * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE},
-										(Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, 0, WHITE);
+			en->on_screen = true;
+			DrawRectangleLines(en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, RED);
+			
+			Rectangle src_area = (Rectangle){en->xfp * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE};
+			Rectangle dst_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+			DrawTexturePro(en->tx, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 		}
+
+		else en->on_screen = false;
 	}
 }
 
+// to animate and move player
 void move(TileList* world_walls, Entity* player)
 {
-	// flag for diagonal movement
-    bool diagonal = (IsKeyDown(KEY_W) && IsKeyDown(KEY_D)) || 
-                      (IsKeyDown(KEY_W) && IsKeyDown(KEY_A)) || 
-                      	(IsKeyDown(KEY_A) && IsKeyDown(KEY_S)) || 
-                      		(IsKeyDown(KEY_S) && IsKeyDown(KEY_D));
+	// animation
+	player->frame_count++;
+	player->xfp = (player->frame_count / player->anim_speed);
 
+	// resetting frames position after last image 
+	if(player->xfp > 3) player->xfp = player->frame_count = 0;
+
+	// flag for diagonal movement
+    bool diagonal = (IsKeyDown(KEY_W) && IsKeyDown(KEY_D)) 
+                	||(IsKeyDown(KEY_W) && IsKeyDown(KEY_A)) 
+                	||(IsKeyDown(KEY_A) && IsKeyDown(KEY_S)) 
+                	||(IsKeyDown(KEY_S) && IsKeyDown(KEY_D));
+
+	// fix diag movement speed up using pythag thrm
     if (diagonal)
     {
         if (!player->adjsp)
         {
-			// through pythag thm: 2x^2 - player's speed^2 = 0, solve for x to find diag speed movement to prevent moving faster diagonly
             player->speed = sqrt(8 * (pow(player->speed, 2))) / 4;
 			player->adjsp = true;
         }
@@ -547,6 +574,7 @@ void move(TileList* world_walls, Entity* player)
 		player->adjsp = false;
     }
 	
+	// to hold the index from the list of walls that we collide with
 	int wall_col = -1;
 
 	if(IsKeyDown(KEY_W))
@@ -555,11 +583,9 @@ void move(TileList* world_walls, Entity* player)
 		player->yfp = 1;
 		player->move = true;
 
+		// collision
 		wall_col = entityCollisionWorld(player, world_walls);
-		if(wall_col >= 0)
-		{
-			player->pos.y += player->speed;
-		}
+		if(wall_col >= 0) player->pos.y += player->speed;
 	}
 
 	if(IsKeyDown(KEY_A))
@@ -568,11 +594,9 @@ void move(TileList* world_walls, Entity* player)
 		player->yfp = 3;
 		player->move = true;
 
+		// collision
 		wall_col = entityCollisionWorld(player, world_walls);
-		if(wall_col >= 0)
-		{
-			player->pos.x += player->speed;
-		}
+		if(wall_col >= 0) player->pos.x += player->speed;
 	}
 
 	if(IsKeyDown(KEY_S))
@@ -581,11 +605,9 @@ void move(TileList* world_walls, Entity* player)
 		player->yfp = 0;
 		player->move = true;
 
+		// collision
 		wall_col = entityCollisionWorld(player, world_walls);
-		if(wall_col >= 0)
-		{
-			player->pos.y -= player->speed;
-		}
+		if(wall_col >= 0) player->pos.y -= player->speed;
 	}
 
 	if(IsKeyDown(KEY_D))
@@ -594,31 +616,35 @@ void move(TileList* world_walls, Entity* player)
 		player->yfp = 2;
 		player->move = true;
 
+		// collision
 		wall_col = entityCollisionWorld(player, world_walls);
-		if(wall_col >= 0)
-		{
-			player->pos.x -= player->speed;
-		}
+		if(wall_col >= 0) player->pos.x -= player->speed;
 	}
 
 	// afk
-	if(!player->move)
-	{
-		player->xfp = player->yfp = 0;
-	}
+	if(!player->move) player->xfp = player->yfp = 0;
 
 	// resetting movement flag
 	player->move = false;
 }
 
-void displayHealthBar(Entity* player)
+// draws health and level bar of the player
+void displayPlayerStats(Entity* player)
 {
-	// drawing the player's health bar
+	// health 
 	DrawRectangle(GetScreenWidth() - 310, GetScreenHeight() - 60, (300) * (player->health / 100),50, RED);
 	DrawRectangleLines(GetScreenWidth() - 310, GetScreenHeight() - 60, 300,50, BLACK);
 	DrawText("HEALTH", GetScreenWidth() - 300, GetScreenHeight() - 80, 20, RED);
+	
+	// level
+	DrawRectangle(10, GetScreenHeight() - 60, (300) * (player->exp / 100), 50, GREEN);
+	DrawRectangleLines(10, GetScreenHeight() - 60, 300, 50, BLACK);
+
+	char lvl_dsc[100]; sprintf(lvl_dsc, "LEVEL: %d", player->level);
+	DrawText(lvl_dsc, 10, GetScreenHeight() - 80, 20, GREEN);
 }
 
+// mechanics to heal
 void heal(TileList* world_heals, Entity* player)
 {
 	int h_col =  entityCollisionWorld(player, world_heals);
@@ -627,119 +653,75 @@ void heal(TileList* world_heals, Entity* player)
 		DrawText("PRESSING H WILL HEAL", GetScreenWidth() - 310, GetScreenHeight() - 110, 20, GREEN);
 		if(IsKeyPressed(KEY_H) && player->health < 100)
 		{
-			player->health = player->health + 20 > 100 ? 100 : player->health + 20;
+			player->health += 20;
+			if(player->health > 100) player->health = 100;
+			
+			// disable the used health pot
 			world_heals->list[h_col].active = false;
 		}
 	}
 }
 
-void fight(Entity* player, Entities* enemies)
+// awarding xp and removing killed entity from map
+void killEntity(Entity* killed_en, Entity* player)
 {
-		int mob_col = entityCollisionEntity(player, enemies);
-		if(mob_col >= 0)
-		{
-			Entity* fight_en = &enemies->entities[mob_col];
-			
-			// hits are based on how fast mobs can hit player
-			if(TimerDone(fight_en->hit_timer))
-			{
-				StartTimer(&fight_en->hit_timer, 1);
-				player->health = (player->health - 20 < 0) ? 0 : player->health - 20;
-				
-				// when you die
-				if(player->health == 0)
-				{
-					player->alive = false;
-				}
-			}
-		}
-		
-		// drawing and updating players level
-		DrawRectangle(10, GetScreenHeight() - 60, (300) * (player->exp / 100), 50, GREEN);
-		DrawRectangleLines(10, GetScreenHeight() - 60, 300, 50, BLACK);
-		
-		char lvl_dsc[100]; sprintf(lvl_dsc, "LEVEL: %d", player->level);
-		DrawText(lvl_dsc, 10, GetScreenHeight() - 80, 20, GREEN);
+	player->exp += 20;
+
+	if(player->exp >= 100)
+	{
+		player->exp = 0;
+		player->level++;
+	}
+
+	*killed_en = NULL_ENTITY;
 }
 
+// moves shot projectiles and deal damage with collided entites
 void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* world_entities, Entity* player, Rectangle screen)
 {
-	for(int i = 0; i < world_weapons->n; i++)
+	for(int i = 0; i < world_weapons->size; i++)
 	{
 		Weapon* wp = &world_weapons->list[i];
 
+		// only onscreen projectiles relavent, offscreen projectiles will be removed
+		if(!CheckCollisionPointRec(wp->pos, screen)) *wp = NULL_WEAPON;
 		if(!wp->on_screen) continue;
 
-		// find angular movement
+		// angular movement
 		float dx = cosf(wp->angle * DEG2RAD) * wp->speed;
 		float dy = sinf(wp->angle * DEG2RAD) * wp->speed;
 
 		// move projectile
 		wp->pos = Vector2Add(wp->pos, (Vector2){dx, dy});
 
-		// only draw if onscreen
-		if(CheckCollisionPointRec((Vector2){wp->pos.x + SCREEN_TILE_SIZE, wp->pos.y + SCREEN_TILE_SIZE}, screen))
-		{
-			DrawTexturePro(wp->texture, (Rectangle){0, 8, TILE_SIZE, TILE_SIZE},
-											 (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, wp->angle, WHITE);
-		}
-
-		else
-		{
-			wp->on_screen = false;
-			wp->pos = (Vector2){-100000000, -100000000};
-			wp->speed = 0;
-		}
-
+		// wall collision
 		int wall_col = projectileCollisionWorld(wp, world_walls);
-		if(wall_col >= 0)
-		{
-			wp->on_screen = false;
-			wp->pos = (Vector2){-100000000, -100000000};
-			wp->speed = 0;
-		}
+		if(wall_col >= 0) *wp = NULL_WEAPON;
 
+		// hitting an entity
 		int en_col = projectileCollisionEntity(wp, world_entities);
 		if(en_col >= 0)
 		{
-			wp->on_screen = false;
-			wp->pos = (Vector2){-100000000, -100000000};
-			wp->speed = 0;
-
+			// doing damage
 			Entity* hit_en = &world_entities->entities[en_col];
-			hit_en->health -= 20;
-				
-				// killing an enemy
-				if(hit_en->health <= 0)
-				{
-					hit_en->alive = false;
-					hit_en->pos = (Vector2){-1000000, -1000000};
-					
-					// gaining experience/leveling up
-					player->exp += 20;
-					if(player->exp >= 100)
-					{
-						player->exp = 0;
-						player->level++;
-					}
-				}
+			hit_en->health -= wp->damage;
+			*wp = NULL_WEAPON;
+
+			// killing enemy
+			if(hit_en->health <= 0) killEntity(hit_en, player);
 		}
+
+		// drawing weapon on-screen
+		Rectangle src_area = (Rectangle){0, 8, TILE_SIZE, TILE_SIZE};
+		Rectangle dst_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, wp->angle - 90, WHITE);
 	}
 }
 
-void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player, Rectangle screen)
+void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entity* player)
 {
-	// animation
-	player->frame_count++;
-	player->xfp = (player->frame_count / player->anim_speed);
-	if(player->xfp > 3)
-	{
-		player->xfp = 0;
-		player->frame_count = 0;
-	}
-
-	// weapons, need to start the timer at the same time
-	for(int i = 0; i < player->weapon.n; i++)
+	// using weapons
+	for(int i = 0; i < player->weapon.size; i++)
 	{
 		Weapon* wp = &player->weapon.list[i];
 
@@ -758,7 +740,7 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world
 			}
 		}
 
-		// have the timers start at the same time
+		// start timers of all based on last weapon timer
 		if(TimerDone(weapon_times[i][wp->count - 1]))
 		{
 			for(int k = 0; k < wp->count; k++)
@@ -769,29 +751,27 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world
 		}
 	}
 
-	// updating all weapons
-	updateProjectiles(world_weapons, world_walls, world_entities, player, screen);
-
-	// movement
+	// movement and animation
 	move(world_walls, player);
 
-	// drawing player
-	DrawTexturePro(player->tx, (Rectangle){player->xfp * TILE_SIZE, player->yfp * TILE_SIZE, TILE_SIZE, TILE_SIZE},
-										(Rectangle){player->pos.x, player->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE}, (Vector2){0,0}, 0, WHITE);
+	// drawing sprite
+	Rectangle src_area = (Rectangle){player->xfp * TILE_SIZE, player->yfp * TILE_SIZE, TILE_SIZE, TILE_SIZE};
+	Rectangle dst_area = (Rectangle){player->pos.x, player->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+	DrawTexturePro(player->tx, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 }
 
+// spawns entity outside view of the player whose rate over time
 void createEnemy(World* world, Camera2D* camera)
 {
 	if(TimerDone(world->spawn_timer))
 	{
-		// create enemy that has no collisions
-		StartTimer(&world->spawn_timer, world->spawn_time);
 		// basic mob properties
 		Entity new_en;
 		new_en.health = 100;
 		new_en.speed = 1;
 		new_en.alive = true;
 		new_en.anim_speed = ANIMATION_SPEED;
+		new_en.damage = 20.0;
 		new_en.id = GetRandomValue(0, 1000000000);
 
 		// randomly generate enemy texture
@@ -825,7 +805,7 @@ void createEnemy(World* world, Camera2D* camera)
 		float ctx = camera->target.x;
 		float cty = camera->target.y;
 
-		// continue to update position until we get an entity that has no collisions with any walls or other entitites
+		// continue to update position until we get an entity that has no collisions with any walls or any other entity
 		do
 		{
 			int rand_pos = GetRandomValue(1, 4);
@@ -843,13 +823,14 @@ void createEnemy(World* world, Camera2D* camera)
 					break;
 			}
 
-		} while(entityCollisionEntity(&new_en, &world->entities) >=0 || entityCollisionWorld(&new_en, &world->walls) >= 0);	
+		} while((entityCollisionEntity(&new_en, &world->entities) >= 0) || (entityCollisionWorld(&new_en, &world->walls) >= 0));	
 
+		// add entity to world and reset timer
 		addEntity(&world->entities, new_en);
 		StartTimer(&world->spawn_timer, world->spawn_time);
 	}
 
-	// increase spawn rate every minutel
+	// increase spawn rate after some duration of time
 	if(TimerDone(world->level_timer))
 	{
 		world->spawn_time -= .05;
@@ -857,17 +838,17 @@ void createEnemy(World* world, Camera2D* camera)
 	}
 }
 
+// returns true if player quits to close the game
 bool deathWindow(World* world, Entity* player)
 {
-	ClearBackground(GRAY);
+	DrawText(DEATH_PROMPT, (GetScreenWidth() / 2.0f) - (MeasureText(DEATH_PROMPT, 30) / 2.0f), GetScreenHeight() / 2.0f, 30, RED);
 
-	DrawText(DEATH_PROMPT, (GetScreenWidth() / 2.0f) - (MeasureText(DEATH_PROMPT, 30) / 2.0f),
-					GetScreenHeight() / 2.0f, 30, RED);
-
-	if(GuiButton((Rectangle){(GetScreenWidth() / 2.0f) - 125, 
-					(GetScreenHeight() / 2.0f) + 50, 100, 50}, "RESPAWN"))
+	// respawn button
+	if(GuiButton((Rectangle){(GetScreenWidth() / 2.0f) - 125, (GetScreenHeight() / 2.0f) + 50, 100, 50}, "RESPAWN"))
 	{
 		clearEntities(&world->entities);
+		clearWeapons(&world->weapons);
+
 		player->pos = world->spawn;
 		player->alive = true;
 		player->health = 100;
@@ -878,16 +859,12 @@ bool deathWindow(World* world, Entity* player)
 
 		world->level_time = 30.00;
 		StartTimer(&world->level_timer, world->level_time);
-
 	}
 
-	if(GuiButton((Rectangle){(GetScreenWidth() / 2.0f) + 50,
-				(GetScreenHeight() / 2.0f) + 50, 100, 50}, "QUIT"))
-	{
-		return true;
-	}
+	// quit button
+	if(GuiButton((Rectangle){(GetScreenWidth() / 2.0f) + 50, (GetScreenHeight() / 2.0f) + 50, 100, 50}, "QUIT")) return true;
 
-	return false;
+	else return false;
 }
 
 int main()
@@ -904,7 +881,6 @@ int main()
 		world.area = (Rectangle){camera.target.x - camera.offset.x, camera.target.y - camera.offset.y, SCREEN_WIDTH, SCREEN_HEIGHT};
 
 		createEnemy(&world, &camera);
-		fight(&player, &world.entities);
 	    
 		BeginDrawing();
 			if(player.alive)
@@ -918,16 +894,18 @@ int main()
 					drawLayer(&world.interactables, &world.area);
 					drawLayer(&world.walls, &world.area);
 					updateEntities(&world.entities, &player, &world);
-					updatePlayer(&world.walls, &world.weapons, &world.entities, &player, world.area);
+					updatePlayer(&world.walls, &world.weapons, &player);
+					updateProjectiles(&world.weapons, &world.walls, &world.entities, &player, world.area);
 				EndMode2D();
 
-				displayHealthBar(&player);
+				displayPlayerStats(&player);
 				heal(&world.health_buffs, &player);
 			}
 
 			// death screen
 			else 
 			{
+				ClearBackground(GRAY);
 				if(deathWindow(&world, &player)) break;
 			}
 

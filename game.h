@@ -22,6 +22,7 @@ typedef struct
 {
 	const char* name;
 	Vector2 pos;
+	float damage;
 	float angle;
 	float speed;
 	// how many of that weapon do we have
@@ -37,7 +38,7 @@ typedef struct
 typedef struct
 {
 	Weapon* list;
-	int n;
+	int size;
 	size_t cap;
 } Weapons;
 
@@ -60,6 +61,7 @@ typedef struct
 	int fc;
 	int frames;
 	int anim_speed;
+	bool on_screen;
 } Tile;
 
 typedef struct
@@ -71,6 +73,7 @@ typedef struct
 	float speed;
 	Vector2 pos;
 	bool alive;
+	bool on_screen;
 	// flag for diagonal speed adjustment
 	bool adjsp;
 	bool move;
