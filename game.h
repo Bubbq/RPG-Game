@@ -28,11 +28,20 @@ typedef struct
 	// how many of that weapon do we have
 	int count;
 	float interval_time;
+	int frames;
+	int anim_speed;
+	float duration_time;
+	float hit_time;
 	// time in-between weapon activations 
 	Timer interval_timer;
+	Timer duration_timer;
+	Timer hit_timer;
 	Texture2D texture;
 	bool on_screen;
 	bool add;
+	int fc;
+	float dx, dy;
+	int dir;
 } Weapon;
 
 typedef struct

@@ -1,3 +1,4 @@
+#include <math.h>
 #include <raylib.h>
 #include <raymath.h>
 #include <stdbool.h>
@@ -37,7 +38,8 @@ const char* TOXIC_HAND = "EnemyAssets/Basic Undead Animations/Toxic Hound/ToxicH
 const char* UNRAVELING_CRAWLER = "EnemyAssets/Basic Undead Animations/Toxic Hound/ToxicHound.png";
 const char* VAMPIRE_BAT = "EnemyAssets/Basic Undead Animations/Vampire Bat/VampireBat.png";
 const char* DEATH_PROMPT = "YOU DIED, RESPAWN?"; 
-const char* ARROW = "Assets/arrow.png";
+// const char* ARROW = "Assets/arrow.png";
+const char* SHURIKEN_PATH = "Assets/SawBladeSuriken.png";
 
 const int ANIMATION_SPEED = 20;
 const int FPS = 60;
@@ -56,7 +58,8 @@ const Weapon NULL_WEAPON = (Weapon){0};
 Vector2 mp;
 
 // blade that points wherever the mouse points
-Weapon DAGGER = {"dagger", (Vector2){0,0}, 20, 0, 2, 6, 1.00};
+Weapon SHURIKEN = {"dagger", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
+Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 2.00, 0.50};
 
 Timer weapon_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
 bool add_weapon[MAX_WEAPONS][MAX_WEAPON_COUNT];
@@ -131,11 +134,34 @@ void addEntity(Entities* world_entities, Entity entity)
 	world_entities->entities[world_entities->size++] = entity;
 }
 
-void addWeapon(Weapons* world_weapons, Weapon weapon)
+// returns angle (in degrees) from 2 cartesian coordinates
+float getAngle(Vector2 v1, Vector2 v2)
 {
+	float dx = v1.x - v2.x;
+	float dy = v1.y - v2.y;
+
+	float angle = atan2f(dy, dx) * RAD2DEG;
+	
+	// angle correction
+	if(angle > 360) angle -= 360;
+	else if(angle < 0) angle += 360;
+
+	return angle;
+}
+
+void addWeapon(Weapons* world_weapons, Weapon* wp, Vector2 pp)
+{
+	wp->on_screen = true;
+	wp->pos = pp;
+	// this will change based on the weapon!
+	wp->angle = getAngle(mp, pp);
+
+	wp->dx = cosf(wp->angle * DEG2RAD) * wp->speed;
+	wp->dy = sinf(wp->angle * DEG2RAD) * wp->speed;
+
 	if(world_weapons->size * sizeof(Weapon) == world_weapons->cap) resizeWeapons(world_weapons);
 
-	world_weapons->list[world_weapons->size++] = weapon;
+	world_weapons->list[world_weapons->size++] = *wp;
 }
 
 void addTile(TileList* layer, Tile tile)
@@ -258,7 +284,8 @@ void drawLayer(TileList* layer, Rectangle* world_area)
 		}
 
 		// only draw when in screen
-		if(CheckCollisionPointRec(tile->sp, *world_area))
+		Rectangle tile_area = (Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		if(CheckCollisionRecs(tile_area, *world_area))
 		{
 			tile->on_screen = true;
 
@@ -354,16 +381,20 @@ void init(World* world, Entity* player, Camera2D* camera)
 	player->weapon.cap = WEAPON_CAP;
 
 	// starting weapon
-	Weapon swp = DAGGER;
-	swp.texture = addTexture(&world->textures, ARROW);
-	swp.interval_time = 1.00;
-	swp.add = true;
+	Weapon wp = SHURIKEN;
+	wp.texture = addTexture(&world->textures, SHURIKEN_PATH);
+	wp.add = true;
+
+	Weapon wp2 = WHIP;
+	wp2.add = true;
 
 	// starting weapn row add flag should be true
     memset(add_weapon, false, sizeof(add_weapon));
     memset(add_weapon[0], true, sizeof(add_weapon[0]));
 
-	addWeapon(&player->weapon, swp);
+	addWeapon(&player->weapon, &wp, player->pos);
+	addWeapon(&player->weapon, &wp2, player->pos);
+
 
 	camera->zoom = 1.00f;
 	camera->target = player->pos;
@@ -396,7 +427,7 @@ int projectileCollisionWorld(Weapon* wp, TileList* layer)
 
 		// only interested in tiles on the screen
 		if(!tile->on_screen) continue;
-
+		
 		Rectangle wp_area  = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
 		Rectangle en_area = (Rectangle){tile->sp.x, tile->sp.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
 
@@ -460,21 +491,6 @@ int entityCollisionEntity(Entity* entity, Entities* world_entities)
 	return -1;
 }
 
-// returns angle (in degrees) from 2 cartesian coordinates
-float getAngle(Vector2 v1, Vector2 v2)
-{
-	float dx = v1.x - v2.x;
-	float dy = v1.y - v2.y;
-
-	float angle = atan2f(dy, dx) * RAD2DEG;
-	
-	// angle correction
-	if(angle > 360) angle -= 360;
-	else if(angle < 0) angle += 360;
-
-	return angle;
-}
-
 // enemy movement, animation, and damage dealing to the player
 void updateEntities(Entities* world_entities, Entity* player, World* world)
 {
@@ -531,10 +547,10 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		}
 
 		// only draw entity when in bounds
-		if(CheckCollisionPointRec((Vector2){en->pos.x + SCREEN_TILE_SIZE, en->pos.y + SCREEN_TILE_SIZE}, world->area))
+		if(CheckCollisionRecs(en_area, world->area))
 		{
 			en->on_screen = true;
-			DrawRectangleLines(en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, RED);
+			// DrawRectangleLines(en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, RED);
 			
 			Rectangle src_area = (Rectangle){en->xfp * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE};
 			Rectangle dst_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
@@ -676,6 +692,40 @@ void killEntity(Entity* killed_en, Entity* player)
 	*killed_en = NULL_ENTITY;
 }
 
+// 	to use the whip weapon
+void whip(Weapon* whip, Entities* world_entities, Entity* player)
+{	
+	if(TimerDone(whip->duration_timer))
+	{
+		// start cooldown
+		whip->add = true;
+		StartTimer(&whip->interval_timer, whip->interval_time);
+	}
+
+	// draw rectangle for now where whip is going to hit enemeies
+	Vector2 start = whip->dir ? (Vector2){player->pos.x - 100, player->pos.y} : (Vector2){player->pos.x + 30, player->pos.y};
+	Rectangle aoe = (Rectangle){start.x, start.y, 100, 20};
+	DrawRectangleLinesEx(aoe, 3, WHITE);
+
+	// dealing damage
+	for(int i = 0; i < world_entities->size; i++)
+	{
+		Entity* en = &world_entities->entities[i];
+		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		
+		if(CheckCollisionRecs(aoe, en_area))
+		{
+
+			if(TimerDone(en->hit_timer))
+			{
+				en->health -= whip->damage;
+				if(en->health <= 0) killEntity(en, player);
+				StartTimer(&en->hit_timer, whip->hit_time);
+			}
+		}
+	}
+}
+
 // moves shot projectiles and deal damage with collided entites
 void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* world_entities, Entity* player, Rectangle screen)
 {
@@ -687,12 +737,13 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		if(!CheckCollisionPointRec(wp->pos, screen)) *wp = NULL_WEAPON;
 		if(!wp->on_screen) continue;
 
-		// angular movement
-		float dx = cosf(wp->angle * DEG2RAD) * wp->speed;
-		float dy = sinf(wp->angle * DEG2RAD) * wp->speed;
+		// moving projectile
+		wp->pos = Vector2Add(wp->pos, (Vector2){wp->dx, wp->dy});
 
-		// move projectile
-		wp->pos = Vector2Add(wp->pos, (Vector2){dx, dy});
+		// animation
+		wp->fc++;
+		int frame_pos = (wp->fc / wp->anim_speed);
+		if(frame_pos > wp->frames) wp->fc = frame_pos = 0;
 
 		// wall collision
 		int wall_col = projectileCollisionWorld(wp, world_walls);
@@ -712,41 +763,61 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		}
 
 		// drawing weapon on-screen
-		Rectangle src_area = (Rectangle){0, 8, TILE_SIZE, TILE_SIZE};
+		Rectangle src_area = (Rectangle){frame_pos * 25, 36, 25, 25};
 		Rectangle dst_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
-		DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, wp->angle - 90, WHITE);
+
+		// DrawRectangleLines(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, WHITE);
+		DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 	}
 }
 
-void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entity* player)
+void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player)
 {
 	// using weapons
 	for(int i = 0; i < player->weapon.size; i++)
 	{
 		Weapon* wp = &player->weapon.list[i];
-
-		for(int j = 0; j < wp->count; j++)
+		
+		// whip use
+		if(strcmp(wp->name, "whip") == 0)
 		{
-			if(TimerDone(weapon_times[i][j]) && add_weapon[i][j])
+			if(TimerDone(wp->interval_timer))
 			{
-				// reset flag and update params
-				add_weapon[i][j] = false;
-				wp->on_screen = true;
-				wp->pos = player->pos;
-				// this will change based on the weapon!
-				wp->angle = getAngle(mp, player->pos);
-
-				addWeapon(world_weapons, *wp);
+				// use flag so we dont start timer over and over again in the window that the interval timer is done
+				if(wp->add)
+				{
+					// choose side, left(0) or right(1) of the player to use the whip
+					wp->dir = GetRandomValue(0, 1);
+					
+					StartTimer(&wp->duration_timer, wp->duration_time);
+					wp->add = false;
+				} 
+				
+				whip(wp, world_entities, player);
 			}
 		}
 
-		// start timers of all based on last weapon timer
-		if(TimerDone(weapon_times[i][wp->count - 1]))
+		// projectile weapon
+		else
 		{
-			for(int k = 0; k < wp->count; k++)
+			for(int j = 0; j < wp->count; j++)
 			{
-				StartTimer(&weapon_times[i][k], wp->interval_time + (k / 10.00));
-				add_weapon[i][k] = true;
+				// update flag and add weapon to the screen
+				if(TimerDone(weapon_times[i][j]) && add_weapon[i][j])
+				{
+					add_weapon[i][j] = false;
+					addWeapon(world_weapons, wp, player->pos);
+				}
+			}
+
+			// start timers of all based on last weapon timer
+			if(TimerDone(weapon_times[i][wp->count - 1]))
+			{
+				for(int k = 0; k < wp->count; k++)
+				{
+					StartTimer(&weapon_times[i][k], wp->interval_time + (k / 10.00));
+					add_weapon[i][k] = true;
+				}
 			}
 		}
 	}
@@ -894,7 +965,7 @@ int main()
 					drawLayer(&world.interactables, &world.area);
 					drawLayer(&world.walls, &world.area);
 					updateEntities(&world.entities, &player, &world);
-					updatePlayer(&world.walls, &world.weapons, &player);
+					updatePlayer(&world.walls, &world.weapons, &world.entities, &player);
 					updateProjectiles(&world.weapons, &world.walls, &world.entities, &player, world.area);
 				EndMode2D();
 
