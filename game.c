@@ -58,8 +58,9 @@ const Weapon NULL_WEAPON = (Weapon){0};
 Vector2 mp;
 
 // blade that points wherever the mouse points
-Weapon SHURIKEN = {"dagger", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
-Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 2.00, 0.50};
+const Weapon SHURIKEN = {"dagger", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
+const Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 1.00, 0.50};
+const Weapon AOE = {"aoe", (Vector2){0,0}, 2, 0, 0, 3, 3, 0, 0, 3, .1};
 
 Timer weapon_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
 bool add_weapon[MAX_WEAPONS][MAX_WEAPON_COUNT];
@@ -153,7 +154,6 @@ void addWeapon(Weapons* world_weapons, Weapon* wp, Vector2 pp)
 {
 	wp->on_screen = true;
 	wp->pos = pp;
-	// this will change based on the weapon!
 	wp->angle = getAngle(mp, pp);
 
 	wp->dx = cosf(wp->angle * DEG2RAD) * wp->speed;
@@ -388,13 +388,17 @@ void init(World* world, Entity* player, Camera2D* camera)
 	Weapon wp2 = WHIP;
 	wp2.add = true;
 
+	Weapon wp3 = AOE;
+	wp3.add = true;
+
 	// starting weapn row add flag should be true
     memset(add_weapon, false, sizeof(add_weapon));
     memset(add_weapon[0], true, sizeof(add_weapon[0]));
 
 	addWeapon(&player->weapon, &wp, player->pos);
 	addWeapon(&player->weapon, &wp2, player->pos);
-
+	addWeapon(&player->weapon, &wp3, player->pos);
+	
 
 	camera->zoom = 1.00f;
 	camera->target = player->pos;
@@ -712,10 +716,10 @@ void whip(Weapon* whip, Entities* world_entities, Entity* player)
 	{
 		Entity* en = &world_entities->entities[i];
 		Rectangle en_area = (Rectangle){en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		if(!en->alive) continue;
 		
 		if(CheckCollisionRecs(aoe, en_area))
 		{
-
 			if(TimerDone(en->hit_timer))
 			{
 				en->health -= whip->damage;
@@ -723,6 +727,41 @@ void whip(Weapon* whip, Entities* world_entities, Entity* player)
 				StartTimer(&en->hit_timer, whip->hit_time);
 			}
 		}
+	}
+}
+
+// to use the aoe weapon
+void aoe(Weapon* aoe, Entities* world_entities, Entity* player)
+{
+	// start cooldown
+	if(TimerDone(aoe->duration_timer))
+	{
+		aoe->add = true;
+		StartTimer(&aoe->interval_timer, aoe->interval_time);
+	}
+
+	Rectangle aoe_area = {aoe->pos.x, aoe->pos.y, 200, 200};
+	DrawRectangleLinesEx(aoe_area, 2, YELLOW);
+
+	for(int i = 0; i < world_entities->size; i++)
+	{
+		Entity* en = &world_entities->entities[i];
+		Rectangle en_area = {en->pos.x, en->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+		if(!en->alive) continue;
+		
+		if(CheckCollisionRecs(aoe_area, en_area))
+		{
+			en->speed = .75;
+			if(TimerDone(en->hit_timer))
+			{
+				en->health -= aoe->damage;
+				if(en->health <= 0) killEntity(en, player);
+				StartTimer(&en->hit_timer, aoe->hit_time);
+			}
+		}
+
+		// restoring org speed
+		else en->speed = 1.00;
 	}
 }
 
@@ -771,7 +810,7 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 	}
 }
 
-void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player)
+void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player, Camera2D* camera)
 {
 	// using weapons
 	for(int i = 0; i < player->weapon.size; i++)
@@ -797,7 +836,31 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world
 			}
 		}
 
-		// projectile weapon
+		// aoe use
+		else if(strcmp(wp->name, "aoe") == 0)
+		{
+			if(TimerDone(wp->interval_timer))
+			{
+				if(wp->add)
+				{
+					// subtract by aoe width so its always in the screen
+					float cox = camera->offset.x - 200;
+					float coy = camera->offset.y - 200;
+					float ctx = camera->target.x;
+					float cty = camera->target.y;
+
+					wp->pos = (Vector2){GetRandomValue(ctx - cox, ctx + cox),
+									GetRandomValue(cty - coy, cty + coy)};
+
+					StartTimer(&wp->duration_timer, wp->duration_time);
+					wp->add = false;
+				}
+
+				aoe(wp, world_entities, player);
+			}
+		}
+
+		// projectile weapon(s)
 		else
 		{
 			for(int j = 0; j < wp->count; j++)
@@ -839,7 +902,7 @@ void createEnemy(World* world, Camera2D* camera)
 		// basic mob properties
 		Entity new_en;
 		new_en.health = 100;
-		new_en.speed = 1;
+		new_en.speed = 1.00;
 		new_en.alive = true;
 		new_en.anim_speed = ANIMATION_SPEED;
 		new_en.damage = 20.0;
@@ -909,7 +972,7 @@ void createEnemy(World* world, Camera2D* camera)
 	}
 }
 
-// returns true if player quits to close the game
+// returns true if player quits game
 bool deathWindow(World* world, Entity* player)
 {
 	DrawText(DEATH_PROMPT, (GetScreenWidth() / 2.0f) - (MeasureText(DEATH_PROMPT, 30) / 2.0f), GetScreenHeight() / 2.0f, 30, RED);
@@ -965,7 +1028,7 @@ int main()
 					drawLayer(&world.interactables, &world.area);
 					drawLayer(&world.walls, &world.area);
 					updateEntities(&world.entities, &player, &world);
-					updatePlayer(&world.walls, &world.weapons, &world.entities, &player);
+					updatePlayer(&world.walls, &world.weapons, &world.entities, &player, &camera);
 					updateProjectiles(&world.weapons, &world.walls, &world.entities, &player, world.area);
 				EndMode2D();
 
