@@ -47,8 +47,6 @@ const int FPS = 60;
 // game times (in seconds)
 const float SPAWN_TIME = 1.00;
 const float LEVEL_TIME = 30.00;
-const float WEAPON_ACTIVATION = 1.00;
-const float WEAPON_USE = 0.10;
 
 // null elements (using lazy deletion)
 const Entity NULL_ENTITY = (Entity){0};
@@ -57,12 +55,12 @@ const Weapon NULL_WEAPON = (Weapon){0};
 // mouse position relative to 2D screen
 Vector2 mp;
 
-// blade that points wherever the mouse points
-const Weapon SHURIKEN = {"dagger", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
-const Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 1.00, 0.50};
+const Weapon SHURIKEN = {"shuriken", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
+const Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 0.30, 0.50};
 const Weapon AOE = {"aoe", (Vector2){0,0}, 2, 0, 0, 3, 3, 0, 0, 3, .1};
+const Weapon FIREBALL = {"fireball", (Vector2){0,0}, 50, 0, 2, 1, 5, 1, 1, 0, 0};
 
-Timer weapon_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
+Timer weapon_activation_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
 bool add_weapon[MAX_WEAPONS][MAX_WEAPON_COUNT];
 
 void StartTimer(Timer *timer, double lifetime)
@@ -153,14 +151,9 @@ float getAngle(Vector2 v1, Vector2 v2)
 void addWeapon(Weapons* world_weapons, Weapon* wp, Vector2 pp)
 {
 	wp->on_screen = true;
-	wp->pos = pp;
-	wp->angle = getAngle(mp, pp);
-
 	wp->dx = cosf(wp->angle * DEG2RAD) * wp->speed;
 	wp->dy = sinf(wp->angle * DEG2RAD) * wp->speed;
-
 	if(world_weapons->size * sizeof(Weapon) == world_weapons->cap) resizeWeapons(world_weapons);
-
 	world_weapons->list[world_weapons->size++] = *wp;
 }
 
@@ -383,13 +376,15 @@ void init(World* world, Entity* player, Camera2D* camera)
 	// starting weapon
 	Weapon wp = SHURIKEN;
 	wp.texture = addTexture(&world->textures, SHURIKEN_PATH);
-	wp.add = true;
 
 	Weapon wp2 = WHIP;
 	wp2.add = true;
 
 	Weapon wp3 = AOE;
 	wp3.add = true;
+
+	Weapon wp4 = FIREBALL;
+	wp4.add = true;
 
 	// starting weapn row add flag should be true
     memset(add_weapon, false, sizeof(add_weapon));
@@ -398,7 +393,7 @@ void init(World* world, Entity* player, Camera2D* camera)
 	addWeapon(&player->weapon, &wp, player->pos);
 	addWeapon(&player->weapon, &wp2, player->pos);
 	addWeapon(&player->weapon, &wp3, player->pos);
-	
+	addWeapon(&player->weapon, &wp4, player->pos);
 
 	camera->zoom = 1.00f;
 	camera->target = player->pos;
@@ -733,13 +728,12 @@ void whip(Weapon* whip, Entities* world_entities, Entity* player)
 // to use the aoe weapon
 void aoe(Weapon* aoe, Entities* world_entities, Entity* player)
 {
-	// start cooldown
 	if(TimerDone(aoe->duration_timer))
 	{
 		aoe->add = true;
-		StartTimer(&aoe->interval_timer, aoe->interval_time);
+	 	StartTimer(&aoe->interval_timer, aoe->interval_time);
 	}
-
+	
 	Rectangle aoe_area = {aoe->pos.x, aoe->pos.y, 200, 200};
 	DrawRectangleLinesEx(aoe_area, 2, YELLOW);
 
@@ -775,7 +769,7 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		// only onscreen projectiles relavent, offscreen projectiles will be removed
 		if(!CheckCollisionPointRec(wp->pos, screen)) *wp = NULL_WEAPON;
 		if(!wp->on_screen) continue;
-
+		
 		// moving projectile
 		wp->pos = Vector2Add(wp->pos, (Vector2){wp->dx, wp->dy});
 
@@ -783,6 +777,14 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		wp->fc++;
 		int frame_pos = (wp->fc / wp->anim_speed);
 		if(frame_pos > wp->frames) wp->fc = frame_pos = 0;
+
+		// drawing weapon on-screen
+		Rectangle src_area = (Rectangle){frame_pos * 25, 36, 25, 25};
+		Rectangle dst_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
+
+		// DrawRectangleLines(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, WHITE);
+		if(strcmp(wp->name, "shuriken") == 0) DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
+		else if(strcmp(wp->name, "fireball") == 0) DrawRectangle(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, BLUE);
 
 		// wall collision
 		int wall_col = projectileCollisionWorld(wp, world_walls);
@@ -800,13 +802,6 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 			// killing enemy
 			if(hit_en->health <= 0) killEntity(hit_en, player);
 		}
-
-		// drawing weapon on-screen
-		Rectangle src_area = (Rectangle){frame_pos * 25, 36, 25, 25};
-		Rectangle dst_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
-
-		// DrawRectangleLines(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, WHITE);
-		DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 	}
 }
 
@@ -860,25 +855,51 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world
 			}
 		}
 
-		// projectile weapon(s)
+		// shoots 3 projectiles as a burst
+		else if(strcmp(wp->name, "fireball") == 0)
+		{
+			if(TimerDone(wp->interval_timer))
+			{
+				wp->pos = player->pos;
+				wp->angle = getAngle(mp, player->pos);
+				
+				Weapon fb1 = *wp;
+				Weapon fb2 = *wp;
+				Weapon fb3 = *wp;
+
+				fb1.angle = wp->angle - 15;
+				fb2.angle = wp->angle;
+				fb3.angle = wp->angle + 15;
+
+				addWeapon(world_weapons, &fb1, player->pos);
+				addWeapon(world_weapons, &fb2, player->pos);
+				addWeapon(world_weapons, &fb3, player->pos);
+
+				StartTimer(&wp->interval_timer, wp->interval_time);
+			}
+		}
+
+		// throwing starts that you can aim
 		else
 		{
 			for(int j = 0; j < wp->count; j++)
 			{
 				// update flag and add weapon to the screen
-				if(TimerDone(weapon_times[i][j]) && add_weapon[i][j])
+				if(TimerDone(weapon_activation_times[i][j]) && add_weapon[i][j])
 				{
+					wp->pos = player->pos;
 					add_weapon[i][j] = false;
+					wp->angle = getAngle(mp, player->pos);
 					addWeapon(world_weapons, wp, player->pos);
 				}
 			}
 
 			// start timers of all based on last weapon timer
-			if(TimerDone(weapon_times[i][wp->count - 1]))
+			if(TimerDone(weapon_activation_times[i][wp->count - 1]))
 			{
 				for(int k = 0; k < wp->count; k++)
 				{
-					StartTimer(&weapon_times[i][k], wp->interval_time + (k / 10.00));
+					StartTimer(&weapon_activation_times[i][k], wp->interval_time + (k / 10.00));
 					add_weapon[i][k] = true;
 				}
 			}
