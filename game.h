@@ -42,6 +42,7 @@ typedef struct
 	int fc;
 	float dx, dy;
 	int dir;
+	int target_id;
 } Weapon;
 
 typedef struct
@@ -50,13 +51,6 @@ typedef struct
 	int size;
 	size_t cap;
 } Weapons;
-
-typedef struct
-{
-	Weapon arsenal[5];
-	// how many weapons we currently have
-	int n;
-} Backpack;
 
 typedef struct
 {

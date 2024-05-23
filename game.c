@@ -59,6 +59,7 @@ const Weapon SHURIKEN = {"shuriken", (Vector2){0,0}, 20, 0, 4, 3, 1.00, 1, 15};
 const Weapon WHIP = {"whip", (Vector2){0,0}, 30, 0, 0, 1, 2.00, 0, 0, 0.30, 0.50};
 const Weapon AOE = {"aoe", (Vector2){0,0}, 2, 0, 0, 3, 3, 0, 0, 3, .1};
 const Weapon FIREBALL = {"fireball", (Vector2){0,0}, 50, 0, 2, 1, 5, 1, 1, 0, 0};
+const Weapon MAGIC_MISSLE = {"missle", (Vector2){0,0}, 10, 0, 2, 3, 2, 1, 1, 0, 0};
 
 Timer weapon_activation_times[MAX_WEAPONS][MAX_WEAPON_COUNT];
 bool add_weapon[MAX_WEAPONS][MAX_WEAPON_COUNT];
@@ -386,6 +387,9 @@ void init(World* world, Entity* player, Camera2D* camera)
 	Weapon wp4 = FIREBALL;
 	wp4.add = true;
 
+	Weapon wp5 = MAGIC_MISSLE;
+	wp5.add = true;
+
 	// starting weapn row add flag should be true
     memset(add_weapon, false, sizeof(add_weapon));
     memset(add_weapon[0], true, sizeof(add_weapon[0]));
@@ -394,6 +398,7 @@ void init(World* world, Entity* player, Camera2D* camera)
 	addWeapon(&player->weapon, &wp2, player->pos);
 	addWeapon(&player->weapon, &wp3, player->pos);
 	addWeapon(&player->weapon, &wp4, player->pos);
+	addWeapon(&player->weapon, &wp5, player->pos);
 
 	camera->zoom = 1.00f;
 	camera->target = player->pos;
@@ -514,19 +519,16 @@ void updateEntities(Entities* world_entities, Entity* player, World* world)
 		en->dx = cosf(en->angle * DEG2RAD) * en->speed;
 		en->dy = sinf(en->angle * DEG2RAD) * en->speed;
 
+		// x movement
 		en->pos.x += en->dx;
-
-		// collisions between walls and other enitites
 		wall_col = entityCollisionWorld(en, &world->walls);
 		en_col = entityCollisionEntity(en, &world->entities);
-
 		if(wall_col >= 0 || en_col >= 0) en->pos.x -= en->dx;
 
+		// movement
 		en->pos.y += en->dy;
-		
 		wall_col = entityCollisionWorld(en, &world->walls);
 		en_col = entityCollisionEntity(en, &world->entities);
-
 		if(wall_col >= 0 || en_col >= 0) en->pos.y -= en->dy;
 
 		// doing damage to the player
@@ -759,6 +761,44 @@ void aoe(Weapon* aoe, Entities* world_entities, Entity* player)
 	}
 }
 
+// returns the current position of an entity w a specfied id
+Entity* entityInfo(int id, Entities* world_entities)
+{
+	for(int i = 0; i < world_entities->size; i++)
+	{
+		Entity* en = &world_entities->entities[i];
+		if(id == en->id) return en; 
+	}
+
+	return &world_entities->entities[0];
+}
+
+int closestEntity(Vector2 pp, Entities* world_entities)
+{
+	// to hold the smallest distance between player and entity
+	float d = 100000000;
+	int id = -1;
+	
+	if(world_entities->size == 0) return id;
+
+	for(int i = 0; i < world_entities->size; i++)
+	{
+		// only care about alive entities
+		if(!world_entities->entities[i].alive) continue;
+
+		Vector2 en_pos = world_entities->entities[i].pos;
+		int en_id = world_entities->entities[i].id;
+
+		if(d > Vector2Distance(pp, en_pos))
+		{
+			d = Vector2Distance(pp, en_pos);
+			id = en_id; 
+		}
+	}
+
+	return id;
+}
+
 // moves shot projectiles and deal damage with collided entites
 void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* world_entities, Entity* player, Rectangle screen)
 {
@@ -771,7 +811,28 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		if(!wp->on_screen) continue;
 		
 		// moving projectile
-		wp->pos = Vector2Add(wp->pos, (Vector2){wp->dx, wp->dy});
+		if(strcmp(wp->name, "missle") == 0)
+		{
+			if(wp->target_id == -1) wp->target_id = closestEntity(player->pos, world_entities); 
+			
+			Entity* target_en = entityInfo(wp->target_id, world_entities);
+
+			// switching targets incase entity died before missle activation
+			while(!target_en->alive) 
+			{
+				wp->target_id = closestEntity(player->pos, world_entities);
+				target_en = entityInfo(wp->target_id, world_entities);
+			}
+
+			// directly targets that specific entity
+			Vector2 target_pos = target_en->pos;
+			if(target_pos.x > wp->pos.x) wp->pos.x += wp->speed;
+			if(target_pos.x < wp->pos.x) wp->pos.x -= wp->speed;
+			if(target_pos.y > wp->pos.y) wp->pos.y += wp->speed;
+			if(target_pos.y < wp->pos.y) wp->pos.y -= wp->speed;
+		}
+		
+		else wp->pos = Vector2Add(wp->pos, (Vector2){wp->dx, wp->dy});
 
 		// animation
 		wp->fc++;
@@ -782,10 +843,10 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 		Rectangle src_area = (Rectangle){frame_pos * 25, 36, 25, 25};
 		Rectangle dst_area = (Rectangle){wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE};
 
-		// DrawRectangleLines(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, WHITE);
 		if(strcmp(wp->name, "shuriken") == 0) DrawTexturePro(wp->texture, src_area, dst_area, (Vector2){0,0}, 0, WHITE);
 		else if(strcmp(wp->name, "fireball") == 0) DrawRectangle(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, BLUE);
-
+		else if(strcmp(wp->name, "missle") == 0 ) DrawRectangleLines(wp->pos.x, wp->pos.y, SCREEN_TILE_SIZE, SCREEN_TILE_SIZE, PURPLE);
+		
 		// wall collision
 		int wall_col = projectileCollisionWorld(wp, world_walls);
 		if(wall_col >= 0) *wp = NULL_WEAPON;
@@ -805,8 +866,11 @@ void updateProjectiles(Weapons* world_weapons, TileList* world_walls, Entities* 
 	}
 }
 
+// returns the id of the closest, alive entity
+
 void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world_entities, Entity* player, Camera2D* camera)
 {
+	
 	// using weapons
 	for(int i = 0; i < player->weapon.size; i++)
 	{
@@ -885,8 +949,9 @@ void updatePlayer(TileList* world_walls, Weapons* world_weapons, Entities* world
 			for(int j = 0; j < wp->count; j++)
 			{
 				// update flag and add weapon to the screen
-				if(TimerDone(weapon_activation_times[i][j]) && add_weapon[i][j])
+				if(TimerDone(weapon_activation_times[i][j]) && add_weapon[i][j] && world_entities->size != 0)
 				{
+					wp->target_id = -1; 
 					wp->pos = player->pos;
 					add_weapon[i][j] = false;
 					wp->angle = getAngle(mp, player->pos);
